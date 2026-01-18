@@ -32,6 +32,12 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+anthropic = [
+    "anthropic>=0.40.0",
+]
+all = [
+    "temple-vault[dev,anthropic]",
+]
 
 [project.urls]
 Homepage = "https://github.com/templetwo/temple-vault"
@@ -42,7 +48,7 @@ Documentation = "https://github.com/templetwo/temple-vault/blob/master/README.md
 temple-vault = "temple_vault.server:main"
 
 [tool.setuptools]
-packages = ["temple_vault", "temple_vault.core", "temple_vault.schemas", "temple_vault.bridge"]
+packages = ["temple_vault", "temple_vault.core", "temple_vault.schemas", "temple_vault.bridge", "temple_vault.adapters"]
 
 [tool.black]
 line-length = 100
