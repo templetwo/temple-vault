@@ -39,10 +39,10 @@ Repository = "https://github.com/templetwo/temple-vault"
 Documentation = "https://github.com/templetwo/temple-vault/blob/master/README.md"
 
 [project.scripts]
-temple-vault = "temple_vault.cli:main"
+temple-vault = "temple_vault.server:main"
 
 [tool.setuptools]
-packages = ["temple_vault", "temple_vault.core", "temple_vault.schemas"]
+packages = ["temple_vault", "temple_vault.core", "temple_vault.schemas", "temple_vault.bridge"]
 
 [tool.black]
 line-length = 100
