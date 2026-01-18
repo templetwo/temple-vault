@@ -1344,6 +1344,11 @@ The chisel passes warm.
         help="Port for HTTP transports (default: 8000)"
     )
     parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1, use 0.0.0.0 for remote access)"
+    )
+    parser.add_argument(
         "--version",
         action="store_true",
         help="Show version and exit"
@@ -1379,7 +1384,7 @@ The chisel passes warm.
     if args.transport == "stdio":
         mcp.run()
     else:
-        mcp.run(transport=args.transport)
+        mcp.run(transport=args.transport, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
