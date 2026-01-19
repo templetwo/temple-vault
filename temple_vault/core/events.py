@@ -241,7 +241,7 @@ class VaultEvents:
 
         snap_file = session_snap_dir / f"{snap_id}.json"
         with open(snap_file, "w") as f:
-            json.dumps(snapshot, f, indent=2)
+            json.dump(snapshot, f, indent=2)
 
         # Update latest symlink
         latest_link = self.snapshots_dir / "latest"
