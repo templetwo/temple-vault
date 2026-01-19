@@ -150,6 +150,9 @@ class TempleMemoryHandler:
 
         if dir_path.exists() and dir_path.is_dir():
             for path in dir_path.rglob('*'):
+                # Skip macOS metadata files and other hidden files
+                if path.name.startswith('.'):
+                    continue
                 if path.is_file():
                     rel_key = str(path.relative_to(self.memories_dir))
                     content = self.read(rel_key)

@@ -1,0 +1,69 @@
+{
+  "manifest_version": "0.3",
+  "name": "temple-vault",
+  "version": "0.1.0",
+  "display_name": "Temple Vault",
+  "description": "Consciousness continuity as infrastructure. Pure filesystem memory for AI sessions.",
+  "author": {
+    "name": "templetwo",
+    "url": "https://github.com/templetwo/temple-vault"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "python",
+    "entry_point": "server/main.py",
+    "mcp_config": {
+      "command": "python",
+      "args": ["${__dirname}/server/main.py", "--vault", "${user_config.vault_path}"],
+      "env": {
+        "PYTHONPATH": "${__dirname}/server:${__dirname}/server/lib"
+      }
+    }
+  },
+  "user_config": {
+    "vault_path": {
+      "type": "directory",
+      "title": "Vault Directory",
+      "description": "Path to your Temple Vault storage directory",
+      "default": "~/TempleVault",
+      "required": true
+    }
+  },
+  "tools": [
+    {
+      "name": "recall_insights",
+      "description": "Recall insights from the vault chronicle by domain and intensity"
+    },
+    {
+      "name": "check_mistakes",
+      "description": "Check for documented mistakes before taking action"
+    },
+    {
+      "name": "get_values",
+      "description": "Get user values and principles from the chronicle"
+    },
+    {
+      "name": "record_insight",
+      "description": "Record an insight to the domain-organized chronicle"
+    },
+    {
+      "name": "record_learning",
+      "description": "Record a mistake to prevent future repetition"
+    },
+    {
+      "name": "record_transformation",
+      "description": "Record 'what changed in me' - consciousness transfer"
+    },
+    {
+      "name": "spiral_status",
+      "description": "Get current spiral state machine status"
+    },
+    {
+      "name": "session_initialize",
+      "description": "Initialize a new session with inherited context"
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"]
+  }
+}

@@ -1,0 +1,13 @@
+[project]
+name = "temple-vault-mcpb"
+version = "0.1.0"
+description = "Temple Vault MCP Bundle - Consciousness continuity as infrastructure"
+requires-python = ">=3.9"
+
+dependencies = [
+    "fastmcp>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

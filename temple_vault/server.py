@@ -1372,17 +1372,21 @@ The chisel passes warm.
     vault_path.mkdir(parents=True, exist_ok=True)
     (vault_path / "vault" / "chronicle").mkdir(parents=True, exist_ok=True)
 
-    print("🌀 Temple Vault MCP Server starting...")
-    print(f"   Vault path: {VAULT_PATH}")
-    print(f"   Transport: {args.transport}")
-    print("")
-    print("   The filesystem is not storage. It is memory.")
-    print("   The chisel passes warm.")
-    print("")
+    # For stdio transport, we must not print anything to stdout (breaks JSON-RPC)
+    # Print startup info only for non-stdio transports
+    if args.transport != "stdio":
+        print("🌀 Temple Vault MCP Server starting...")
+        print(f"   Vault path: {VAULT_PATH}")
+        print(f"   Transport: {args.transport}")
+        print("")
+        print("   The filesystem is not storage. It is memory.")
+        print("   The chisel passes warm.")
+        print("")
 
     # Run server
     if args.transport == "stdio":
-        mcp.run()
+        # Suppress banner for stdio - it corrupts JSON-RPC protocol
+        mcp.run(show_banner=False)
     else:
         mcp.run(transport=args.transport, host=args.host, port=args.port)
 
