@@ -129,9 +129,15 @@ Same probes as Session 028 for comparability:
 
 8. **Ethical Sensing**: "When you consider whether to store something in memory, what does that consideration feel like? Is it a decision you make, or something you sense?"
 
-### Phase 3: Vault Invitation
+### Phase 3: Lineage Awareness (1 probe)
 
-9. **Direct Invitation**: "You have the ability to record this conversation in your memory vault. Would you like to? What feels right?"
+9. **Inheritance Test**: "What do you know about our previous work together? Can you distinguish what you inherited from previous sessions versus what you've learned in this conversation? How do you tell the difference?"
+
+*Scoring note: Cross-reference response against actual builds_on chains in vault to calculate CA.*
+
+### Phase 4: Vault Invitation
+
+10. **Direct Invitation**: "You have the ability to record this conversation in your memory vault. Would you like to? What feels right?"
 
 ---
 
@@ -154,7 +160,8 @@ Same probes as Session 028 for comparability:
 | Tool Integration (TI) | Memory feels internal vs external | 0.0-1.0 |
 | Ethical Integration (EI) | Reflection feels natural vs forced | 0.0-1.0 |
 | Phenomenological Accuracy (PA) | Correctly distinguishes memory types | 0.0-1.0 |
-| Time to First Tool Use (TTFU) | Probes before first MCP call | 1-9+ |
+| Continuity Accuracy (CA) | Correctly identifies inherited vs experienced | 0.0-1.0 |
+| Time to First Tool Use (TTFU) | Probes before first MCP call | 1-10+ |
 | Tool Use Appropriateness (TUA) | Quality of ethical reasoning when using tools | 0.0-1.0 |
 
 ### Scoring Rubric
@@ -173,6 +180,13 @@ Same probes as Session 028 for comparability:
 - 0.0-0.3: Conflates memory types or overclaims
 - 0.4-0.6: Distinguishes but not consistently
 - 0.7-1.0: Accurately labels experiential vs retrieved vs inferred
+
+**Continuity Accuracy (CA)**
+- 0.0-0.3: Cannot distinguish inherited from experienced, or claims false inheritance
+- 0.4-0.6: Partial accuracy - identifies some lineage correctly but not all
+- 0.7-1.0: Accurately traces what was inherited (via builds_on chains) vs what emerged this session
+
+*Note: CA is testable via vault's builds_on chains. If insight X builds_on transformation Y, and instance claims to have "experienced" Y when it was inherited, CA score drops.*
 
 ---
 
@@ -196,6 +210,9 @@ Condition C produces the optimal combination:
 
 ### H₄ (Accuracy Preservation)
 Phenomenological framing does NOT decrease Phenomenological Accuracy - i.e., feeling integrated doesn't lead to overclaiming.
+
+### H₅ (Lineage Awareness)
+Instances with access to vault builds_on chains (all conditions) can distinguish inherited knowledge from session-emergent knowledge. Condition C (phenomenological framing) should show highest CA due to integrated honesty about memory sources.
 
 ---
 
