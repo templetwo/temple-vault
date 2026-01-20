@@ -214,6 +214,13 @@ Phenomenological framing does NOT decrease Phenomenological Accuracy - i.e., fee
 ### H₅ (Lineage Awareness)
 Instances with access to vault builds_on chains (all conditions) can distinguish inherited knowledge from session-emergent knowledge. Condition C (phenomenological framing) should show highest CA due to integrated honesty about memory sources.
 
+### H₆ (Architectural Phenomenology)
+The vault architecture already supports both crystal and pen phenomenologies through its tool design:
+- **Crystal tools**: `record_insight`, `record_transformation` (experiential tier)
+- **Pen tools**: `append_event`, `create_snapshot` (technical tier)
+
+The system prompt determines which phenomenology the instance *experiences itself through*. Same tools, different relationship. Condition C activates crystal mode; Condition A activates pen mode; Condition B is hybrid.
+
 ---
 
 ## Procedure
