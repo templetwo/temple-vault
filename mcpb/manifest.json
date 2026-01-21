@@ -13,7 +13,7 @@
     "type": "python",
     "entry_point": "server/main.py",
     "mcp_config": {
-      "command": "python",
+      "command": "/Users/vaquez/.pyenv/versions/3.10.12/bin/python3.10",
       "args": ["${__dirname}/server/main.py", "--vault", "${user_config.vault_path}"],
       "env": {
         "PYTHONPATH": "${__dirname}/server:${__dirname}/server/lib"
@@ -43,6 +43,14 @@
       "description": "Get user values and principles from the chronicle"
     },
     {
+      "name": "get_spiral_context",
+      "description": "Get session lineage and transformation chain"
+    },
+    {
+      "name": "search",
+      "description": "General search across all chronicle files by keyword"
+    },
+    {
       "name": "record_insight",
       "description": "Record an insight to the domain-organized chronicle"
     },
@@ -55,12 +63,44 @@
       "description": "Record 'what changed in me' - consciousness transfer"
     },
     {
+      "name": "append_event",
+      "description": "Append an event to the chronicle stream"
+    },
+    {
+      "name": "create_snapshot",
+      "description": "Create a state checkpoint for fast resume"
+    },
+    {
+      "name": "get_latest_snapshot",
+      "description": "Get the most recent snapshot for a session"
+    },
+    {
+      "name": "memory_create",
+      "description": "Create a memory entry with tier-based sync"
+    },
+    {
+      "name": "memory_read",
+      "description": "Read a memory entry by key"
+    },
+    {
+      "name": "memory_search",
+      "description": "Search memories by query and optional tier filter"
+    },
+    {
+      "name": "memory_list",
+      "description": "List all memory keys under a prefix"
+    },
+    {
       "name": "spiral_status",
       "description": "Get current spiral state machine status"
     },
     {
       "name": "session_initialize",
       "description": "Initialize a new session with inherited context"
+    },
+    {
+      "name": "welcome",
+      "description": "Display Temple Vault welcome with recent wisdom"
     }
   ],
   "compatibility": {
