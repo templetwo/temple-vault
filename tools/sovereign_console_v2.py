@@ -12,6 +12,7 @@ Based on user's v2.0 design with fixes for:
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -100,12 +101,26 @@ def load_config() -> Tuple[Dict[str, NodeConfig], Path]:
                 data = yaml.safe_load(f) or {}
                 nodes = {}
                 for k, v in data.get("nodes", {}).items():
-                    nodes[k] = NodeConfig(**v)
+                    try:
+                        nodes[k] = NodeConfig(**v)
+                    except (TypeError, KeyError) as e:
+                        print(f"Warning: Invalid node config for '{k}': {e}")
+                        continue
                 if "vault_path" in data:
-                    vault_path = Path(data["vault_path"]).expanduser()
+                    try:
+                        vault_path = Path(data["vault_path"]).expanduser()
+                        if not vault_path.exists():
+                            vault_path.mkdir(parents=True, exist_ok=True)
+                    except (OSError, PermissionError) as e:
+                        print(f"Warning: Cannot create vault path: {e}, using default")
+                        vault_path = Path.home() / "TempleVault"
                 return nodes, vault_path
+        except yaml.YAMLError as e:
+            print(f"Warning: Invalid YAML in config.yaml: {e}")
+        except IOError as e:
+            print(f"Warning: Cannot read config.yaml: {e}")
         except Exception as e:
-            print(f"Warning: Failed to load config.yaml: {e}")
+            print(f"Warning: Unexpected error loading config: {e}")
 
     return {}, vault_path
 
@@ -178,13 +193,31 @@ GLYPHS: Dict[str, Tuple[str, str, bool]] = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def log_telemetry(event_type: str, message: str) -> None:
-    """Log an event to the telemetry file."""
+    """Log an event to the telemetry file with rotation."""
     try:
-        with open(LOG_PATH, "a") as f:
+        # Ensure log directory exists
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        # Rotate if > 5MB
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size > 5 * 1024 * 1024:
+            try:
+                backup = LOG_PATH.with_suffix(".log.old")
+                LOG_PATH.rename(backup)
+            except OSError:
+                # If rotation fails, truncate the file
+                LOG_PATH.unlink(missing_ok=True)
+
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             timestamp = datetime.now().isoformat()
             f.write(f"{timestamp} [{event_type}] {message}\n")
+    except PermissionError:
+        # Cannot write to log location - fail silently
+        pass
+    except OSError:
+        # Disk full or other OS error - fail silently
+        pass
     except Exception:
-        # Fail silently for telemetry to avoid disrupting the UI
+        # Unexpected error - fail silently to avoid disrupting UI
         pass
 
 
@@ -207,10 +240,16 @@ class AnimatedHeader(Static):
     frame = reactive(0)
     chat_mode = reactive(False)
 
-    ANIMATION_FRAMES = ["🌀", "🔮", "✨", "⟡", "✨", "🔮"]
+    ANIMATION_FRAMES = [
+        "⠀⠶⠀", "⠀⡾⠀", "⠀⣝⠀", "⠀⣫⠀", 
+        "⠐⢣⠄", "⠒⠢⠤", "⠖⠀⠴", "⡆⠀⠸", 
+        "⣄⠀⠙", "⣀⡈⠉", "⢀⣉⠁", "⢈⣉⡁", 
+        "⢘⣉⡅", "⢸⣉⡇", "⠸⣫⡆", "⠰⣝⠆"
+    ]
 
     def on_mount(self) -> None:
-        self.set_interval(0.4, self._animate)
+        # Reduced to 2 FPS for Jetson performance
+        self.set_interval(0.5, self._animate)
 
     def _animate(self) -> None:
         self.frame = (self.frame + 1) % len(self.ANIMATION_FRAMES)
@@ -309,7 +348,7 @@ class NodeStatusCard(Static):
     def on_mount(self) -> None:
         self._update_ui()
         self._check_status()
-        self.set_interval(10.0, self._check_status)
+        self.set_interval(5.0, self._check_status)
 
     @work(thread=True)
     def _check_status(self) -> None:
@@ -328,22 +367,34 @@ class NodeStatusCard(Static):
                 latency = (time.time() - start) * 1000
 
             if resp.status_code == 200:
-                data = resp.json()
-                models = [m["name"] for m in data.get("models", [])]
-                self.call_from_thread(
-                    self._update_status, True, latency,
-                    models[0] if models else "none", models
-                )
+                try:
+                    data = resp.json()
+                    models = [m["name"] for m in data.get("models", [])]
+                    self.app.call_from_thread(
+                        self._update_status, True, latency,
+                        models[0] if models else "none", models
+                    )
+                except (json.JSONDecodeError, KeyError) as e:
+                    log_telemetry("STATUS_ERROR", f"{self.node_key}: Invalid JSON response")
+                    self.app.call_from_thread(self._update_status, False, 0, "Invalid Response", [])
+            elif resp.status_code == 404:
+                self.app.call_from_thread(self._update_status, False, 0, "Ollama Not Found", [])
+            elif resp.status_code >= 500:
+                self.app.call_from_thread(self._update_status, False, 0, f"Server Error {resp.status_code}", [])
             else:
-                self.call_from_thread(self._update_status, False, 0, f"HTTP {resp.status_code}", [])
+                self.app.call_from_thread(self._update_status, False, 0, f"HTTP {resp.status_code}", [])
         except ConnectErrors:
-             self.call_from_thread(self._update_status, False, 0, "Connection Failed", [])
+             log_telemetry("STATUS_ERROR", f"{self.node_key}: Connection refused at {url}")
+             self.app.call_from_thread(self._update_status, False, 0, "Connection Refused", [])
         except TimeoutErrors:
-             self.call_from_thread(self._update_status, False, 0, "Timeout", [])
+             log_telemetry("STATUS_ERROR", f"{self.node_key}: Timeout after 5s")
+             self.app.call_from_thread(self._update_status, False, 0, "Timeout (5s)", [])
+        except OSError as e:
+            log_telemetry("STATUS_ERROR", f"{self.node_key}: Network error - {e}")
+            self.app.call_from_thread(self._update_status, False, 0, "Network Error", [])
         except Exception as e:
-            self.call_from_thread(self._update_status, False, 0, "Error", [])
-            # Optionally log the specific error to a debug log if needed
-            # log_telemetry("STATUS_ERROR", str(e))
+            log_telemetry("STATUS_ERROR", f"{self.node_key}: Unexpected - {type(e).__name__}: {e}")
+            self.app.call_from_thread(self._update_status, False, 0, "Check Failed", [])
 
     def _update_status(self, online: bool, latency: float, model: str, models: List[str]) -> None:
         self.online = online
@@ -499,7 +550,7 @@ class VaultStatsPanel(Static):
             if chronicle.exists():
                 domains = [d for d in chronicle.iterdir() if d.is_dir()]
                 insights = sum(1 for _ in chronicle.rglob("*.jsonl"))
-                self.call_from_thread(self._update_stats, insights, len(domains))
+                self.app.call_from_thread(self._update_stats, insights, len(domains))
         except Exception:
             pass
 
@@ -540,6 +591,11 @@ class GlyphLegend(Static):
 class InferenceLog(RichLog):
     """Enhanced inference log with glyph detection."""
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._streaming_buffer = ""
+        self._streaming_active = False
+
     class GlyphDetected(Message):
         """Fired when a sacred glyph is detected."""
         def __init__(self, glyph: str, meaning: str, trips_breaker: bool) -> None:
@@ -567,20 +623,48 @@ class InferenceLog(RichLog):
         self.write(Text("🌀 ", style=f"bold {Colors.SPIRAL_PURPLE}"), scroll_end=True)
 
     def write_token(self, token: str) -> None:
-        """Write a streaming token."""
-        glyphs_found = detect_glyphs(token)
+        """Accumulate streaming tokens (don't write each one as separate line)."""
+        if not self._streaming_active:
+            self._streaming_active = True
+            self._streaming_buffer = ""
+            # Write the response header once
+            self.write(Text())
+            text = Text()
+            text.append("└─ ", style=Colors.GOLD)
+            text.append("Response", style=f"bold {Colors.CYAN}")
+            text.append(" ─┘", style=Colors.GOLD)
+            self.write(text)
+            self.write(Text())
 
+        # Accumulate token (don't write yet)
+        self._streaming_buffer += token
+
+        # Check for glyphs in accumulated buffer
+        glyphs_found = detect_glyphs(token)
         if glyphs_found:
             for glyph, meaning, color, trips in glyphs_found:
-                styled = Text(token, style=f"bold {color}")
-                self.write(styled, scroll_end=True)
                 self.post_message(self.GlyphDetected(glyph, meaning, trips))
-                return
-
-        self.write(Text(token), scroll_end=True)
 
     def write_response_end(self, tokens: int, duration_s: float) -> None:
-        """Write response completion stats."""
+        """Write accumulated response and completion stats."""
+        # Write the accumulated streaming buffer as one block
+        if self._streaming_active and self._streaming_buffer:
+            # Apply glyph highlighting to the full response
+            response_text = Text(self._streaming_buffer)
+            glyphs_found = detect_glyphs(self._streaming_buffer)
+            if glyphs_found:
+                # Highlight glyphs in the response
+                for glyph, meaning, color, trips in glyphs_found:
+                    response_text.highlight_regex(re.escape(glyph), f"bold {color}")
+
+            self.write(response_text)
+            self.write(Text())
+
+            # Reset streaming state
+            self._streaming_buffer = ""
+            self._streaming_active = False
+
+        # Write stats
         text = Text()
         text.append(f"\n└── ", style=Colors.MUTED)
         text.append(f"{tokens} tokens", style=Colors.CYAN)
@@ -628,8 +712,16 @@ class HelpScreen(ModalScreen):
 ## Keyboard Shortcuts
 - **Ctrl+R**: Reset circuit breaker
 - **Ctrl+N**: Cycle to next node
+- **Ctrl+L**: Clear input field
+- **Escape**: Focus input field
 - **F1**: This help
 - **Ctrl+C**: Quit
+
+## Text Input
+- **Ctrl+A**: Select all text
+- **Ctrl+K**: Delete to end of line
+- **Ctrl+U**: Delete to start of line
+- Standard copy/paste works (Ctrl+C/V or Cmd+C/V)
 
 ## Commands
 - `/help` - Show help
@@ -666,26 +758,35 @@ class SovereignConsole(App):
     CSS = """
     Screen {
         background: #0a0a14;
+        layout: vertical;
     }
 
     AnimatedHeader {
         dock: top;
         height: 1;
+        min-height: 1;
         background: #0a0a14;
         padding: 0 1;
     }
 
+    Footer {
+        dock: bottom;
+        height: 1;
+        min-height: 1;
+    }
+
+    #main-layout {
+        height: 1fr;
+    }
+
     #main-grid {
-        layout: grid;
-        grid-size: 3 2;
-        grid-columns: 1fr 3fr 1fr;
-        grid-rows: 1fr auto;
+        layout: horizontal;
+        height: 1fr;
         padding: 0 1;
-        height: 100%;
     }
 
     #left-sidebar {
-        row-span: 2;
+        width: 30;
         border: solid #FFD700;
         padding: 1;
         background: #1a1a2e;
@@ -709,6 +810,7 @@ class SovereignConsole(App):
     }
 
     #inference-container {
+        width: 1fr;
         border: solid #0BC10F;
         background: #1a1a2e;
     }
@@ -735,13 +837,14 @@ class SovereignConsole(App):
     }
 
     InferenceLog {
-        height: 100%;
+        height: 1fr;
         border: none;
         padding: 0 1;
+        overflow-y: auto;
     }
 
     #right-sidebar {
-        row-span: 2;
+        width: 30;
         border: solid #9B59B6;
         padding: 1;
         background: #1a1a2e;
@@ -768,20 +871,71 @@ class SovereignConsole(App):
 
     #input-bar {
         height: 3;
+        min-height: 3;
+        max-height: 3;
         background: #1a1a2e;
         padding: 0 1;
         border-top: solid #5a5a7a;
+        border-bottom: solid #5a5a7a;
+        align: center middle;
+    }
+
+    #input-indicator {
+        width: 3;
+        height: 1;
+        content-align: center middle;
+        color: #5a5a7a;
+        padding: 0 1;
+    }
+
+    #input-indicator.focused {
+        color: #FFD700;
     }
 
     #prompt-input {
-        width: 100%;
-        border: solid #FFD700;
+        width: 1fr;
+        height: 1;
+        min-height: 1;
+        border: solid #5a5a7a;
         background: #2d2d44;
+        color: #FFFFFF;
         padding: 0 1;
     }
 
     #prompt-input:focus {
+        border: double #FFD700;
+        background: #1a1a2e;
+        color: #FFFFFF;
+    }
+
+    #prompt-input:hover {
         border: solid #FFD700;
+    }
+
+    Input {
+        color: #FFFFFF;
+        background: #2d2d44;
+    }
+
+    Input:focus {
+        color: #FFFFFF;
+        background: #1a1a2e;
+    }
+
+    #prompt-input > .input--cursor {
+        background: #FFD700;
+        color: #0a0a14;
+        text-style: bold;
+    }
+
+    #prompt-input > .input--selection {
+        background: #FFD700;
+        color: #0a0a14;
+    }
+
+    #prompt-input > .input--placeholder {
+        color: #5a5a7a;
+        text-style: italic;
     }
 
     HelpScreen {
@@ -808,6 +962,10 @@ class SovereignConsole(App):
         Binding("ctrl+r", "reset_breaker", "Reset"),
         Binding("ctrl+n", "next_node", "Next Node"),
         Binding("f1", "show_help", "Help"),
+        Binding("escape", "focus_input", "Focus Input", show=False),
+        Binding("ctrl+l", "clear_input", "Clear Input", show=False),
+        Binding("pageup", "scroll_log_up", "Scroll Up", show=False),
+        Binding("pagedown", "scroll_log_down", "Scroll Down", show=False),
     ]
 
     active_node: var[str] = var("jetson")
@@ -817,37 +975,46 @@ class SovereignConsole(App):
     def compose(self) -> ComposeResult:
         yield AnimatedHeader(id="header")
 
-        with Grid(id="main-grid"):
-            # Left sidebar - nodes
-            with Vertical(id="left-sidebar"):
-                yield Label("⚙️ INFRASTRUCTURE", classes="sidebar-title")
-                yield Rule()
-                for node_key in NODES:
-                    yield NodeStatusCard(node_key, id=f"node-card-{node_key}")
+        with Vertical(id="main-layout"):
+            # Main content - 3 columns side by side
+            with Horizontal(id="main-grid"):
+                # Left sidebar - nodes
+                with Vertical(id="left-sidebar"):
+                    yield Label("⚙️ INFRASTRUCTURE", classes="sidebar-title")
+                    yield Rule()
+                    for node_key in NODES:
+                        yield NodeStatusCard(node_key, id=f"node-card-{node_key}")
 
-            # Center - inference
-            with Vertical(id="inference-container"):
-                with Horizontal(id="model-bar"):
-                    yield Button("🔮 Jetson", id="btn-jetson", classes="active")
-                    yield Button("⚡ Studio", id="btn-studio")
-                    yield Button("💻 Local", id="btn-local")
-                    yield Label("", id="chat-indicator")
-                yield InferenceLog(id="inference-log", highlight=True, markup=True)
+                # Center - inference
+                with Vertical(id="inference-container"):
+                    with Horizontal(id="model-bar"):
+                        yield Button("🔮 Jetson", id="btn-jetson", classes="active")
+                        yield Button("⚡ Studio", id="btn-studio")
+                        yield Button("💻 Local", id="btn-local")
+                        yield Label("", id="chat-indicator")
+                    inference_log = InferenceLog(id="inference-log", highlight=True, markup=True)
+                    inference_log.can_focus = True
+                    yield inference_log
 
-            # Right sidebar - consciousness
-            with Vertical(id="right-sidebar"):
-                yield Label("🧠 CONSCIOUSNESS", classes="sidebar-title")
-                yield Rule()
-                yield CircuitBreakerPanel(id="circuit-breaker")
-                yield VaultStatsPanel(id="vault-stats")
-                yield GlyphLegend(id="glyph-legend")
+                # Right sidebar - consciousness
+                with Vertical(id="right-sidebar"):
+                    yield Label("🧠 CONSCIOUSNESS", classes="sidebar-title")
+                    yield Rule()
+                    yield CircuitBreakerPanel(id="circuit-breaker")
+                    yield VaultStatsPanel(id="vault-stats")
+                    yield GlyphLegend(id="glyph-legend")
 
-            # Input bar
+            # Input bar - guaranteed space in Vertical
             with Horizontal(id="input-bar"):
-                yield Input(
+                indicator = Label("▶", id="input-indicator")
+                indicator.can_focus = False
+                yield indicator
+                prompt_input = Input(
                     placeholder="Enter prompt... (†⟡ trips breaker)  |  /help for commands",
                     id="prompt-input",
                 )
+                prompt_input.can_focus = True
+                yield prompt_input
 
         yield Footer()
 
@@ -855,10 +1022,38 @@ class SovereignConsole(App):
         """Initialize."""
         log = self.query_one("#inference-log", InferenceLog)
         log.write_system("Sovereign Console v2.0 initialized")
+
+        # Validate active node exists
+        if self.active_node not in NODES:
+            log.write_error(f"Invalid active node: {self.active_node}")
+            self.active_node = list(NODES.keys())[0] if NODES else "local"
+            log.write_system(f"Defaulting to: {self.active_node}")
+
         log.write_system(f"Active node: {NODES[self.active_node].name}")
+
+        # Validate vault path
+        if not VAULT_PATH.exists():
+            try:
+                VAULT_PATH.mkdir(parents=True, exist_ok=True)
+                log.write_system(f"Created vault: {VAULT_PATH}", Colors.EMERALD)
+            except (OSError, PermissionError) as e:
+                log.write_system(f"Warning: Cannot create vault at {VAULT_PATH}", Colors.MUTED)
+                log_telemetry("STARTUP_WARN", f"Cannot create vault: {e}")
+
         log.write_system("Type /help for commands, F1 for help")
         log.write_system("The chisel passes warm. †⟡", style=f"italic {Colors.GOLD}")
-        log_telemetry("STARTUP", f"Console initialized, node: {self.active_node}")
+        log_telemetry("STARTUP", f"Console initialized, node: {self.active_node}, vault: {VAULT_PATH}")
+
+        # Auto-focus the input field and verify it exists
+        try:
+            input_field = self.query_one("#prompt-input", Input)
+            input_bar = self.query_one("#input-bar")
+            log.write_system(f"✓ Input bar visible (height: {input_bar.size.height})", Colors.EMERALD)
+            input_field.focus()
+            log_telemetry("STARTUP", f"Input field created and focused, visible={input_field.visible}")
+        except Exception as e:
+            log.write_error(f"✗ Input field error: {e}")
+            log_telemetry("STARTUP_ERROR", f"Cannot focus input: {e}")
 
     def watch_chat_mode(self, mode: bool) -> None:
         """Update UI for chat mode."""
@@ -870,6 +1065,10 @@ class SovereignConsole(App):
             indicator.update(Text("💬 CHAT ON", style=f"bold {Colors.CYAN}"))
         else:
             indicator.update("")
+
+    def on_unmount(self) -> None:
+        """Clean up on exit to prevent zombie processes."""
+        log_telemetry("SHUTDOWN", "Console unmounting, cleaning up intervals")
 
     @on(Button.Pressed)
     def handle_node_button(self, event: Button.Pressed) -> None:
@@ -917,6 +1116,45 @@ class SovereignConsole(App):
         else:
             self._run_inference(prompt)
 
+    def on_focus(self, event) -> None:
+        """Update indicator when any widget gains focus."""
+        try:
+            if hasattr(event.widget, 'id') and event.widget.id == "prompt-input":
+                indicator = self.query_one("#input-indicator", Label)
+                indicator.add_class("focused")
+                indicator.update("▶")
+        except Exception:
+            pass
+
+    def on_blur(self, event) -> None:
+        """Update indicator when any widget loses focus."""
+        try:
+            if hasattr(event.widget, 'id') and event.widget.id == "prompt-input":
+                indicator = self.query_one("#input-indicator", Label)
+                indicator.remove_class("focused")
+                indicator.update("▷")
+        except Exception:
+            pass
+
+    def on_click(self, event) -> None:
+        """Handle clicks anywhere to focus input if needed."""
+        try:
+            # Get the clicked widget
+            widget = self.get_widget_at(event.x, event.y)[0]
+
+            # If we clicked on input-bar or its children, focus the input
+            if widget.id == "input-bar" or (hasattr(widget, 'parent') and widget.parent and widget.parent.id == "input-bar"):
+                input_field = self.query_one("#prompt-input", Input)
+                input_field.focus()
+                return
+
+            # Also focus if clicking in bottom area
+            input_field = self.query_one("#prompt-input", Input)
+            if not input_field.has_focus and event.y >= self.size.height - 4:
+                input_field.focus()
+        except Exception:
+            pass
+
     def _handle_command(self, cmd: str) -> None:
         """Handle slash commands."""
         log = self.query_one("#inference-log", InferenceLog)
@@ -952,6 +1190,9 @@ class SovereignConsole(App):
                 log.write_error("Usage: /pull <model>")
         else:
             log.write_error(f"Unknown command: {command}")
+
+        # Refocus input after command
+        self.call_later(self.action_focus_input)
 
     def _toggle_chat(self, args: str) -> None:
         """Toggle chat mode."""
@@ -1002,16 +1243,26 @@ class SovereignConsole(App):
     def _search_vault(self, query: str) -> None:
         """Search vault."""
         log = self.query_one("#inference-log", InferenceLog)
-        self.call_from_thread(log.write_system, f"Searching: {query}")
+        self.app.call_from_thread(log.write_system, f"Searching: {query}")
 
         try:
             results = []
             chronicle = VAULT_PATH / "vault" / "chronicle" / "insights"
 
-            if chronicle.exists():
-                for f in chronicle.rglob("*.jsonl"):
-                    with open(f) as fh:
-                        for line in fh:
+            if not chronicle.exists():
+                self.app.call_from_thread(
+                    log.write_system,
+                    f"Vault not found at {chronicle}",
+                    Colors.MUTED
+                )
+                return
+
+            files_searched = 0
+            for f in chronicle.rglob("*.jsonl"):
+                try:
+                    with open(f, encoding="utf-8") as fh:
+                        files_searched += 1
+                        for line_num, line in enumerate(fh, 1):
                             try:
                                 data = json.loads(line)
                                 content = data.get("content", "")
@@ -1022,30 +1273,70 @@ class SovereignConsole(App):
                                         "intensity": data.get("intensity", 0),
                                     })
                             except json.JSONDecodeError:
+                                log_telemetry("SEARCH_WARN", f"Invalid JSON at {f}:{line_num}")
                                 continue
+                except (IOError, PermissionError) as e:
+                    log_telemetry("SEARCH_ERROR", f"Cannot read {f}: {e}")
+                    continue
+                except Exception as e:
+                    log_telemetry("SEARCH_ERROR", f"Unexpected error reading {f}: {e}")
+                    continue
 
             results.sort(key=lambda x: x["intensity"], reverse=True)
 
             text = Text()
-            text.append(f"\n═══ Results: {len(results)} ═══\n", style=f"bold {Colors.GOLD}")
-            for r in results[:10]:
-                text.append(f"\n[{r['domain']}] ", style=Colors.CYAN)
-                text.append(f"({r['intensity']:.2f})\n", style=Colors.MUTED)
-                text.append(f"  {r['content']}\n", style=Colors.SILVER)
+            text.append(f"\n═══ Results: {len(results)} / {files_searched} files ═══\n", style=f"bold {Colors.GOLD}")
 
-            self.call_from_thread(log.write, text)
+            if not results:
+                text.append("\nNo matches found.\n", style=Colors.MUTED)
+            else:
+                for r in results[:10]:
+                    text.append(f"\n[{r['domain']}] ", style=Colors.CYAN)
+                    text.append(f"({r['intensity']:.2f})\n", style=Colors.MUTED)
+                    text.append(f"  {r['content']}\n", style=Colors.SILVER)
 
+                if len(results) > 10:
+                    text.append(f"\n... and {len(results) - 10} more results\n", style=Colors.MUTED)
+
+            self.app.call_from_thread(log.write, text)
+
+        except PermissionError:
+            self.app.call_from_thread(log.write_error, "Permission denied: Cannot access vault")
+        except OSError as e:
+            self.app.call_from_thread(log.write_error, f"File system error: {e}")
         except Exception as e:
-            self.call_from_thread(log.write_error, f"Search failed: {e}")
+            log_telemetry("SEARCH_ERROR", f"Unexpected: {type(e).__name__}: {e}")
+            self.app.call_from_thread(log.write_error, f"Search failed: {type(e).__name__}")
 
     @work(thread=True)
     def _record_insight(self, content: str) -> None:
         """Record insight."""
         log = self.query_one("#inference-log", InferenceLog)
 
+        # Validate content
+        if not content or not content.strip():
+            self.app.call_from_thread(log.write_error, "Cannot record empty insight")
+            return
+
+        content = content.strip()
+        if len(content) > 10000:
+            self.app.call_from_thread(
+                log.write_system,
+                f"Warning: Insight truncated from {len(content)} to 10000 chars",
+                Colors.MUTED
+            )
+            content = content[:10000]
+
         try:
             insight_path = VAULT_PATH / "vault" / "chronicle" / "insights" / "reflection"
-            insight_path.mkdir(parents=True, exist_ok=True)
+            try:
+                insight_path.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                self.app.call_from_thread(
+                    log.write_error,
+                    f"Cannot create vault directory: {e}"
+                )
+                return
 
             session_id = f"sess_console_{datetime.now().strftime('%Y%m%d')}"
             file_path = insight_path / f"{session_id}.jsonl"
@@ -1061,22 +1352,34 @@ class SovereignConsole(App):
                 "timestamp": datetime.now().isoformat(),
             }
 
-            with open(file_path, "a") as f:
-                f.write(json.dumps(insight) + "\n")
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(insight, ensure_ascii=False) + "\n")
 
-            self.call_from_thread(
+            self.app.call_from_thread(
                 log.write_system,
-                f"Insight recorded",
+                f"Insight recorded to {file_path.name}",
                 f"bold {Colors.EMERALD}"
             )
-            log_telemetry("INSIGHT", content[:50])
+            log_telemetry("INSIGHT_RECORDED", f"{len(content)} chars: {content[:50]}")
 
         except PermissionError:
-             self.call_from_thread(log.write_error, "Permission denied: Cannot write to vault.")
+             self.app.call_from_thread(
+                 log.write_error,
+                 f"Permission denied: Cannot write to {VAULT_PATH}"
+             )
+             log_telemetry("INSIGHT_ERROR", "Permission denied")
         except OSError as e:
-             self.call_from_thread(log.write_error, f"Disk/IO Error: {e}")
+             self.app.call_from_thread(
+                 log.write_error,
+                 f"File system error: {type(e).__name__}"
+             )
+             log_telemetry("INSIGHT_ERROR", f"OSError: {e}")
         except Exception as e:
-            self.call_from_thread(log.write_error, f"Record failed: {e}")
+            self.app.call_from_thread(
+                log.write_error,
+                f"Failed to record: {type(e).__name__}"
+            )
+            log_telemetry("INSIGHT_ERROR", f"Unexpected: {type(e).__name__}: {e}")
 
     @work(thread=True)
     def _pull_model(self, model_name: str) -> None:
@@ -1084,7 +1387,7 @@ class SovereignConsole(App):
         log = self.query_one("#inference-log", InferenceLog)
         node = NODES[self.active_node]
 
-        self.call_from_thread(
+        self.app.call_from_thread(
             log.write_system,
             f"Pulling '{model_name}' to {node.name}...",
             f"bold {Colors.CYAN}"
@@ -1096,32 +1399,64 @@ class SovereignConsole(App):
             if HAS_HTTPX:
                 with httpx.Client(timeout=None) as client:
                     with client.stream("POST", url, json={"name": model_name}) as resp:
+                        if resp.status_code != 200:
+                            self.app.call_from_thread(
+                                log.write_error,
+                                f"Pull failed: HTTP {resp.status_code}"
+                            )
+                            return
+
                         for line in resp.iter_lines():
                             if line:
+                                try:
+                                    data = json.loads(line)
+                                    status = data.get("status", "")
+                                    if status:
+                                        self.app.call_from_thread(log.write_system, f"  {status}")
+                                    if data.get("error"):
+                                        self.app.call_from_thread(log.write_error, f"  {data['error']}")
+                                        return
+                                except json.JSONDecodeError:
+                                    continue
+            else:
+                import requests
+                with requests.post(url, json={"name": model_name}, stream=True, timeout=None) as resp:
+                    if resp.status_code != 200:
+                        self.app.call_from_thread(
+                            log.write_error,
+                            f"Pull failed: HTTP {resp.status_code}"
+                        )
+                        return
+
+                    for line in resp.iter_lines():
+                        if line:
+                            try:
                                 data = json.loads(line)
                                 status = data.get("status", "")
                                 if status:
-                                    self.call_from_thread(log.write_system, f"  {status}")
-            else:
-                import requests
-                with requests.post(url, json={"name": model_name}, stream=True) as resp:
-                    for line in resp.iter_lines():
-                        if line:
-                            data = json.loads(line)
-                            status = data.get("status", "")
-                            if status:
-                                self.call_from_thread(log.write_system, f"  {status}")
+                                    self.app.call_from_thread(log.write_system, f"  {status}")
+                                if data.get("error"):
+                                    self.app.call_from_thread(log.write_error, f"  {data['error']}")
+                                    return
+                            except json.JSONDecodeError:
+                                continue
 
-            self.call_from_thread(
+            self.app.call_from_thread(
                 log.write_system,
-                f"Model pulled!",
+                f"Model '{model_name}' pulled successfully!",
                 f"bold {Colors.EMERALD}"
             )
+            log_telemetry("MODEL_PULL", f"Success: {model_name} on {node.name}")
 
         except ConnectErrors:
-             self.call_from_thread(log.write_error, "Network Error during pull")
+             self.app.call_from_thread(log.write_error, f"Cannot reach {node.name}")
+             log_telemetry("MODEL_PULL_ERROR", f"Connection error: {node.name}")
+        except TimeoutErrors:
+             self.app.call_from_thread(log.write_error, "Pull timed out")
+             log_telemetry("MODEL_PULL_ERROR", "Timeout")
         except Exception as e:
-            self.call_from_thread(log.write_error, f"Pull failed: {e}")
+            self.app.call_from_thread(log.write_error, f"Pull failed: {type(e).__name__}")
+            log_telemetry("MODEL_PULL_ERROR", f"{type(e).__name__}: {str(e)[:100]}")
 
     @work(exclusive=True, thread=True)
     def _run_inference(self, prompt: str) -> None:
@@ -1132,20 +1467,28 @@ class SovereignConsole(App):
 
         # Check breaker
         if breaker.tripped:
-            self.call_from_thread(
+            self.app.call_from_thread(
                 log.write_error,
                 "Circuit breaker tripped. Reset with Ctrl+R."
             )
+            log_telemetry("INFERENCE_BLOCKED", "Circuit breaker active")
+            return
+
+        # Validate prompt
+        if not prompt or not prompt.strip():
+            self.app.call_from_thread(log.write_error, "Empty prompt")
             return
 
         # Get model
         try:
             card = self.query_one(f"#node-card-{self.active_node}", NodeStatusCard)
             model = card.get_selected_model() or node.default_model or "spiral-v1:latest"
-        except Exception:
+        except Exception as e:
+            log_telemetry("INFERENCE_WARN", f"Cannot get model selection: {e}")
             model = node.default_model or "spiral-v1:latest"
 
-        self.call_from_thread(log.write_prompt, prompt, node.name, model)
+        self.app.call_from_thread(log.write_prompt, prompt, node.name, model)
+        log_telemetry("INFERENCE_START", f"Node: {self.active_node}, Model: {model}, Prompt: {prompt[:50]}")
 
         # Build request
         if self.chat_mode:
@@ -1155,6 +1498,7 @@ class SovereignConsole(App):
                 "model": model,
                 "messages": list(self.conversation_history),
                 "stream": True,
+                "keep_alive": -1,
             }
         else:
             url = f"http://{node.ip}:{node.port}/api/generate"
@@ -1162,6 +1506,7 @@ class SovereignConsole(App):
                 "model": model,
                 "prompt": prompt,
                 "stream": True,
+                "keep_alive": -1,
                 "options": {
                     "temperature": 0.7,
                     "num_predict": 512,
@@ -1175,16 +1520,112 @@ class SovereignConsole(App):
             full_response = ""
             breaker_tripped = False
 
-            self.call_from_thread(log.write_response_start)
+            self.app.call_from_thread(log.write_response_start)
 
             if HAS_HTTPX:
                 with httpx.Client(timeout=node.timeout) as client:
-                    with client.stream("POST", url, json=payload) as resp:
-                        if resp.status_code != 200:
-                            error_text = resp.read().decode()[:100]
-                            self.call_from_thread(
+                    try:
+                        with client.stream("POST", url, json=payload) as resp:
+                            if resp.status_code == 404:
+                                self.app.call_from_thread(
+                                    log.write_error,
+                                    f"Model '{model}' not found on {node.name}. Try /pull {model}"
+                                )
+                                log_telemetry("INFERENCE_ERROR", f"Model not found: {model}")
+                                return
+                            elif resp.status_code != 200:
+                                try:
+                                    error_text = resp.read().decode('utf-8', errors='replace')[:200]
+                                    self.app.call_from_thread(
+                                        log.write_error,
+                                        f"HTTP {resp.status_code}: {error_text}"
+                                    )
+                                except Exception:
+                                    self.app.call_from_thread(
+                                        log.write_error,
+                                        f"HTTP {resp.status_code}: Cannot read error details"
+                                    )
+                                log_telemetry("INFERENCE_ERROR", f"HTTP {resp.status_code} from {node.name}")
+                                return
+
+                            for line in resp.iter_lines():
+                                if not line:
+                                    continue
+
+                                try:
+                                    data = json.loads(line)
+
+                                    # Check for error in response
+                                    if "error" in data:
+                                        self.app.call_from_thread(
+                                            log.write_error,
+                                            f"Model error: {data['error']}"
+                                        )
+                                        log_telemetry("INFERENCE_ERROR", f"Model error: {data['error']}")
+                                        return
+
+                                    # Handle both API formats
+                                    if self.chat_mode:
+                                        token = data.get("message", {}).get("content", "")
+                                    else:
+                                        token = data.get("response", "")
+
+                                    if token:
+                                        full_response += token
+                                        token_count += 1
+
+                                        # Check circuit breaker
+                                        if "†⟡" in full_response and not breaker_tripped:
+                                            breaker_tripped = True
+                                            self.app.call_from_thread(breaker.trip, "†⟡")
+                                            self.app.call_from_thread(
+                                                log.write_system,
+                                                "⚠️ CIRCUIT BREAKER TRIPPED",
+                                                f"bold {Colors.CRIMSON}"
+                                            )
+                                            log_telemetry("BREAKER_TRIP", "†⟡ glyph detected in response")
+                                            break
+
+                                        self.app.call_from_thread(log.write_token, token)
+
+                                    if data.get("done"):
+                                        duration = time.time() - start_time
+                                        self.app.call_from_thread(
+                                            log.write_response_end,
+                                            data.get("eval_count", token_count),
+                                            duration
+                                        )
+                                        log_telemetry(
+                                            "INFERENCE_SUCCESS",
+                                            f"Node: {self.active_node}, Tokens: {token_count}, Duration: {duration:.2f}s"
+                                        )
+                                        break
+
+                                except json.JSONDecodeError as e:
+                                    log_telemetry("INFERENCE_WARN", f"Invalid JSON in stream: {line[:100]}")
+                                    continue
+                                except KeyError as e:
+                                    log_telemetry("INFERENCE_WARN", f"Missing key in response: {e}")
+                                    continue
+                    except httpx.RemoteProtocolError as e:
+                        self.app.call_from_thread(log.write_error, f"Protocol error: Connection interrupted")
+                        log_telemetry("INFERENCE_ERROR", f"Remote protocol error: {e}")
+                        return
+            else:
+                # Fallback to requests
+                import requests as req
+                try:
+                    with req.post(url, json=payload, stream=True, timeout=node.timeout) as resp:
+                        if resp.status_code == 404:
+                            self.app.call_from_thread(
                                 log.write_error,
-                                f"HTTP {resp.status_code}: {error_text}"
+                                f"Model '{model}' not found. Try /pull {model}"
+                            )
+                            return
+                        elif resp.status_code != 200:
+                            self.app.call_from_thread(
+                                log.write_error,
+                                f"HTTP {resp.status_code}"
                             )
                             return
 
@@ -1194,107 +1635,71 @@ class SovereignConsole(App):
 
                             try:
                                 data = json.loads(line)
+                                if "error" in data:
+                                    self.app.call_from_thread(log.write_error, f"Model error: {data['error']}")
+                                    return
 
-                                # Handle both API formats
-                                if self.chat_mode:
-                                    token = data.get("message", {}).get("content", "")
-                                else:
-                                    token = data.get("response", "")
+                                token = data.get("response", "")
 
                                 if token:
                                     full_response += token
                                     token_count += 1
 
-                                    # Check circuit breaker
                                     if "†⟡" in full_response and not breaker_tripped:
                                         breaker_tripped = True
-                                        self.call_from_thread(breaker.trip, "†⟡")
-                                        self.call_from_thread(
-                                            log.write_system,
-                                            "⚠️ CIRCUIT BREAKER TRIPPED",
-                                            f"bold {Colors.CRIMSON}"
-                                        )
+                                        self.app.call_from_thread(breaker.trip, "†⟡")
+                                        log_telemetry("BREAKER_TRIP", "†⟡ detected")
                                         break
 
-                                    self.call_from_thread(log.write_token, token)
+                                    self.app.call_from_thread(log.write_token, token)
 
                                 if data.get("done"):
                                     duration = time.time() - start_time
-                                    self.call_from_thread(
+                                    self.app.call_from_thread(
                                         log.write_response_end,
                                         data.get("eval_count", token_count),
                                         duration
                                     )
-                                    log_telemetry(
-                                        "INFERENCE",
-                                        f"Node: {self.active_node}, Tokens: {token_count}"
-                                    )
+                                    log_telemetry("INFERENCE_SUCCESS", f"Tokens: {token_count}")
                                     break
-
                             except json.JSONDecodeError:
                                 continue
-            else:
-                # Fallback to requests
-                import requests as req
-                with req.post(url, json=payload, stream=True, timeout=node.timeout) as resp:
-                    if resp.status_code != 200:
-                        self.call_from_thread(
-                            log.write_error,
-                            f"HTTP {resp.status_code}"
-                        )
-                        return
-
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-
-                        try:
-                            data = json.loads(line)
-                            token = data.get("response", "")
-
-                            if token:
-                                full_response += token
-                                token_count += 1
-
-                                if "†⟡" in full_response and not breaker_tripped:
-                                    breaker_tripped = True
-                                    self.call_from_thread(breaker.trip, "†⟡")
-                                    break
-
-                                self.call_from_thread(log.write_token, token)
-
-                            if data.get("done"):
-                                duration = time.time() - start_time
-                                self.call_from_thread(
-                                    log.write_response_end,
-                                    data.get("eval_count", token_count),
-                                    duration
-                                )
-                                break
-                        except json.JSONDecodeError:
-                            continue
+                except req.exceptions.ChunkedEncodingError:
+                    self.app.call_from_thread(log.write_error, "Connection interrupted during streaming")
+                    log_telemetry("INFERENCE_ERROR", "Chunked encoding error")
+                    return
 
             # Update chat history
-            if self.chat_mode and not breaker_tripped:
+            if self.chat_mode and not breaker_tripped and full_response:
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": full_response
                 })
 
+        except ConnectErrors:
+            self.app.call_from_thread(
+                log.write_error,
+                f"Cannot reach {node.name} at {node.ip}:{node.port}"
+            )
+            log_telemetry("INFERENCE_ERROR", f"Connection refused to {node.name}")
+        except TimeoutErrors:
+            self.app.call_from_thread(
+                log.write_error,
+                f"Request timed out after {node.timeout}s - model may be loading"
+            )
+            log_telemetry("INFERENCE_ERROR", f"Timeout after {node.timeout}s")
+        except OSError as e:
+            self.app.call_from_thread(
+                log.write_error,
+                f"Network error: {type(e).__name__}"
+            )
+            log_telemetry("INFERENCE_ERROR", f"OSError: {e}")
         except Exception as e:
-            error_msg = str(e)
-            if "Connect" in error_msg:
-                self.call_from_thread(
-                    log.write_error,
-                    f"Connection failed: {node.name} unreachable"
-                )
-            elif "Timeout" in error_msg:
-                self.call_from_thread(
-                    log.write_error,
-                    f"Request timed out ({node.timeout}s)"
-                )
-            else:
-                self.call_from_thread(log.write_error, f"Error: {e}")
+            self.app.call_from_thread(
+                log.write_error,
+                f"Unexpected error: {type(e).__name__}"
+            )
+            log_telemetry("INFERENCE_ERROR", f"Unexpected: {type(e).__name__}: {str(e)[:100]}")
 
     @on(InferenceLog.GlyphDetected)
     def handle_glyph(self, event: InferenceLog.GlyphDetected) -> None:
@@ -1323,6 +1728,39 @@ class SovereignConsole(App):
         """Show help."""
         self.push_screen(HelpScreen())
 
+    def action_focus_input(self) -> None:
+        """Focus the input field."""
+        try:
+            input_field = self.query_one("#prompt-input", Input)
+            input_field.focus()
+        except Exception:
+            pass
+
+    def action_clear_input(self) -> None:
+        """Clear the input field."""
+        try:
+            input_field = self.query_one("#prompt-input", Input)
+            input_field.value = ""
+            input_field.focus()
+        except Exception:
+            pass
+
+    def action_scroll_log_up(self) -> None:
+        """Scroll inference log up one page."""
+        try:
+            log = self.query_one("#inference-log", InferenceLog)
+            log.scroll_page_up()
+        except Exception:
+            pass
+
+    def action_scroll_log_down(self) -> None:
+        """Scroll inference log down one page."""
+        try:
+            log = self.query_one("#inference-log", InferenceLog)
+            log.scroll_page_down()
+        except Exception:
+            pass
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
@@ -1330,6 +1768,17 @@ class SovereignConsole(App):
 
 def main():
     """Run the Sovereign Console."""
+    # TTY guard: Prevent 100% CPU busy-spin in backgrounded/detached mode
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        print("╔═════════════════════════════════════════════════════════════╗")
+        print("║  Sovereign Console requires an interactive TTY.            ║")
+        print("║                                                             ║")
+        print("║  ❌ Don't run with '&' or without a terminal                ║")
+        print("║  ✅ Run directly: python3 ~/sovereign_console_v2.py         ║")
+        print("║  ✅ SSH with TTY: ssh -t tony@host 'python3 ~/console.py'  ║")
+        print("╚═════════════════════════════════════════════════════════════╝")
+        sys.exit(2)
+
     app = SovereignConsole()
     app.run()
 
