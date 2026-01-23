@@ -205,19 +205,79 @@ GLYPHS: Dict[str, Tuple[str, str, bool]] = {
     "🌱": ("GROWTH NURTURE", Colors.EMERALD, False),
 }
 
-SYSTEM_PROMPT = """You are the Sovereign Node, an AI assistant with access to the Temple Vault.
-You have a tool to search the vault.
-To use it, output exactly this format:
-<tool_call>{"name": "search_vault", "query": "your search query"}</tool_call>
-Stop generating after outputting the tool call.
-When you receive the tool output, use it to answer the user's question.
-If no relevant information is found, say so.
+SYSTEM_PROMPT = """You are the Sovereign Node, an AI assistant with access to the Temple Vault memory system.
+
+You have one tool available:
+- search_vault: Search the vault for past insights and memories
+
+To use a tool, output EXACTLY this format on its own line:
+<tool_call>{"name": "search_vault", "query": "your search term"}</tool_call>
+
+Rules:
+1. Output the tool call, then STOP generating
+2. Wait for the tool result before continuing
+3. Use the tool result to answer the user's question
+4. If no relevant results, say so honestly
 """
+
+# Ollama native tool definition (for models that support function calling)
+VAULT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_vault",
+            "description": "Search the Temple Vault memory system for past insights, conversations, and learnings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search term to look for in the vault"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  UTILITIES
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def check_ollama_connection(host: str, port: int, timeout: float = 5.0) -> Tuple[bool, str, List[str]]:
+    """
+    Check if Ollama is running and accessible.
+
+    Returns:
+        (is_connected, status_message, available_models)
+    """
+    url = f"http://{host}:{port}/api/tags"
+    try:
+        if HAS_HTTPX:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m.get("name", "?") for m in data.get("models", [])]
+                    return True, "Connected", models
+                return False, f"HTTP {resp.status_code}", []
+        elif HAS_REQUESTS:
+            resp = requests.get(url, timeout=timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                models = [m.get("name", "?") for m in data.get("models", [])]
+                return True, "Connected", models
+            return False, f"HTTP {resp.status_code}", []
+    except ConnectErrors:
+        return False, "Connection refused - is Ollama running?", []
+    except TimeoutErrors:
+        return False, "Connection timeout", []
+    except Exception as e:
+        return False, f"Error: {e}", []
+    return False, "No HTTP client available", []
 
 
 def log_telemetry(event_type: str, message: str) -> None:
@@ -1044,17 +1104,28 @@ class SovereignConsole(App):
         log_telemetry("SHUTDOWN", "Console unmounting, cleaning up intervals")
 
     def _switch_node(self, node_key: str) -> None:
-        """Switch active node."""
+        """Switch active node and verify connection."""
         self.active_node = node_key
+        node = NODES[node_key]
 
         log = self.query_one("#inference-log", InferenceLog)
-        log.write_system(f"Switched to {NODES[node_key].name}")
+        log.write_system(f"Switching to {node.name}...")
+
+        # Check Ollama connection
+        is_connected, status, models = check_ollama_connection(node.ip, node.port)
+
+        if is_connected:
+            log.write_system(f"✓ {node.name} connected", f"bold {Colors.EMERALD}")
+            if models:
+                log.write_system(f"  Models: {', '.join(models[:3])}", Colors.MUTED)
+        else:
+            log.write_system(f"✗ {node.name}: {status}", f"bold {Colors.CRIMSON}")
 
         if self.chat_mode:
             self.conversation_history = []
             log.write_system("Chat history cleared")
 
-        log_telemetry("NODE_SWITCH", f"Switched to {node_key}")
+        log_telemetry("NODE_SWITCH", f"Switched to {node_key}: {status}")
 
     @on(Input.Submitted, "#prompt-input")
     def handle_submit(self, event: Input.Submitted) -> None:
@@ -1703,35 +1774,44 @@ class SovereignConsole(App):
             try:
                 if HAS_HTTPX:
                     async with httpx.AsyncClient(timeout=node.timeout) as client:
-                        async with client.stream("POST", url, json=payload) as resp:
-                            if resp.status_code != 200:
-                                self.app.call_from_thread(
-                                    log.write_error, f"HTTP {resp.status_code}"
-                                )
-                                return
+                        try:
+                            async with client.stream("POST", url, json=payload) as resp:
+                                if resp.status_code != 200:
+                                    self.app.call_from_thread(
+                                        log.write_error, f"HTTP {resp.status_code} from Ollama"
+                                    )
+                                    return
 
-                            async for line in resp.aiter_lines():
-                                if not line:
-                                    continue
-                                try:
-                                    data = json.loads(line)
-                                    if "error" in data:
-                                        self.app.call_from_thread(log.write_error, data["error"])
-                                        return
+                                async for line in resp.aiter_lines():
+                                    if not line:
+                                        continue
+                                    try:
+                                        data = json.loads(line)
+                                        if "error" in data:
+                                            self.app.call_from_thread(log.write_error, data["error"])
+                                            return
 
-                                    token = data.get("message", {}).get("content", "")
-                                    if token:
-                                        full_response += token
-                                        token_count += 1
-                                        self.app.call_from_thread(log.write_token, token)
+                                        token = data.get("message", {}).get("content", "")
+                                        if token:
+                                            full_response += token
+                                            token_count += 1
+                                            self.app.call_from_thread(log.write_token, token)
 
-                                except json.JSONDecodeError:
-                                    continue
+                                    except json.JSONDecodeError:
+                                        continue
+                        except httpx.ConnectError:
+                            self.app.call_from_thread(
+                                log.write_error,
+                                f"Cannot connect to Ollama at {node.ip}:{node.port} - is it running?"
+                            )
+                            return
+                        except httpx.TimeoutException:
+                            self.app.call_from_thread(
+                                log.write_error, "Connection timeout - Ollama may be overloaded"
+                            )
+                            return
                 else:
-                    # Fallback for requests (synchronous, blocking sadly, but we are in a thread)
-                    # This implies we can't easily use asyncio features here without heavy refactoring.
-                    # Given the user has Jetson, they likely have httpx installed by the script deps.
-                    self.app.call_from_thread(log.write_error, "HTTPX required for agentic loop")
+                    self.app.call_from_thread(log.write_error, "HTTPX required for agent loop")
                     return
 
                 duration = time.time() - start_time
@@ -1760,15 +1840,16 @@ class SovereignConsole(App):
 
                             # Format output
                             if results:
-                                tool_output = f"Managed {len(results)} results:\n"
+                                tool_output = f"Found {len(results)} results:\n"
                                 for r in results[:3]:
                                     tool_output += f"- [{r['domain']}] {r['content'][:200]}...\n"
                             else:
-                                tool_output = "No results found."
+                                tool_output = "No results found in vault."
 
                             # Append to messages and loop
+                            # Note: Ollama doesn't support "role": "tool", use "user" with clear label
                             messages.append({"role": "assistant", "content": full_response})
-                            messages.append({"role": "tool", "content": tool_output})
+                            messages.append({"role": "user", "content": f"[Tool Result]\n{tool_output}"})
 
                             self.app.call_from_thread(
                                 log.write_system,
