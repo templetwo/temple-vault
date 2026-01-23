@@ -28,22 +28,29 @@ pip install -e ".[dev]"  # Installs dev deps including mypy, ruff, black
 
 ## Quality Gates (CI Enforced)
 
-All PRs must pass:
+All PRs must pass (on `temple_vault/` and `tests/` only):
 
 | Gate | Command | Notes |
 |------|---------|-------|
-| Lint | `ruff check .` | Enforces E, F, I rules |
-| Format | `ruff format --check .` | Canonical formatter |
-| Typecheck | `mypy temple_vault` | Optional but recommended |
+| Lint | `ruff check temple_vault tests` | Enforces E, F, I rules on product code |
+| Format | `ruff format --check temple_vault tests` | Canonical formatter |
+| Typecheck | `mypy --show-error-codes temple_vault` | Deterministic, deterministic config |
 | Test | `pytest -v --tb=short` | Uses temp dirs, no `~/TempleVault` |
 | Build | `python -m build` | Ensures package is valid |
 
 ### Running Gates Locally
 
 ```bash
-# All gates
-ruff check . && ruff format --check . && mypy temple_vault && pytest -v --tb=short && python -m build
+# All gates (product paths only)
+ruff check temple_vault tests && ruff format --check temple_vault tests && mypy --show-error-codes temple_vault && pytest -v --tb=short && python -m build
 ```
+
+### Enforcement Boundary
+
+- **Product code (strict CI):** `temple_vault/`, `tests/`
+- **Research annex (exempt from CI):** `dual-agent-lattice/`, `mcpb/`, `tools/`
+
+The research annex is allowed to be messy—CI only witnesses the installable package.
 
 ---
 
