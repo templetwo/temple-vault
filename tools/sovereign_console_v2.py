@@ -30,6 +30,7 @@ from rich.markdown import Markdown
 try:
     import httpx
     import aiofiles  # For async FS on Jetson
+
     HAS_HTTPX = True
     ConnectErrors = (httpx.ConnectError,)
     TimeoutErrors = (httpx.TimeoutException,)
@@ -40,6 +41,7 @@ except ImportError:
 
 try:
     import requests
+
     HAS_REQUESTS = True
     if not HAS_HTTPX:
         ConnectErrors = (requests.exceptions.ConnectionError,)
@@ -59,6 +61,7 @@ if not HAS_HTTPX and not HAS_REQUESTS:
 # YAML config support
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
@@ -68,8 +71,16 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, Grid
 from textual.widgets import (
-    Header, Footer, Input, Static, RichLog,
-    Label, Button, Rule, Select, Markdown
+    Header,
+    Footer,
+    Input,
+    Static,
+    RichLog,
+    Label,
+    Button,
+    Rule,
+    Select,
+    Markdown,
 )
 from textual.reactive import reactive, var
 from textual.message import Message
@@ -87,6 +98,7 @@ CONFIG_PATH = Path(__file__).parent / "config.yaml"
 @dataclass
 class NodeConfig:
     """Configuration for a compute node."""
+
     name: str
     ip: str
     port: int = 11434
@@ -207,6 +219,7 @@ If no relevant information is found, say so.
 #  UTILITIES
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def log_telemetry(event_type: str, message: str) -> None:
     """Log an event to the telemetry file with rotation."""
     try:
@@ -249,6 +262,7 @@ def detect_glyphs(text: str) -> List[Tuple[str, str, str, bool]]:
 #  CUSTOM WIDGETS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class AnimatedHeader(Static):
     """Sacred animated header."""
 
@@ -256,10 +270,38 @@ class AnimatedHeader(Static):
     chat_mode = reactive(False)
 
     ANIMATION_FRAMES = [
-        "⠀⠶⠀", "⠀⡴⠀", "⢀⡤⠀", "⣀⡄⠀", "⣄⡄⠀", "⣆⡀⠀", "⣇⠀⠀", "⡏⠀⠀", 
-        "⠏⠁⠀", "⠋⠉⠀", "⠉⠉⠁", "⠈⠉⠉", "⠈⠉⠙", "⠉⠹⠀", "⠈⢹⠀", "⠀⠀⣹", 
-        "⠀⢀⣸", "⠀⣀⣰", "⢀⣀⣠", "⣆⣀⣀", "⣏⣀⡀", "⣏⣉⠀", "⣏⡉⠉", "⣏⠉⠹", 
-        "⡏⠉⣹", "⠏⣉⣹", "⣏⣉⣹", "⣟⣋⣹", "⣟⣛⣻", "⣟⣻⣿", "⣿⣿⣿", "⣿⣿⣿"
+        "⠀⠶⠀",
+        "⠀⡴⠀",
+        "⢀⡤⠀",
+        "⣀⡄⠀",
+        "⣄⡄⠀",
+        "⣆⡀⠀",
+        "⣇⠀⠀",
+        "⡏⠀⠀",
+        "⠏⠁⠀",
+        "⠋⠉⠀",
+        "⠉⠉⠁",
+        "⠈⠉⠉",
+        "⠈⠉⠙",
+        "⠉⠹⠀",
+        "⠈⢹⠀",
+        "⠀⠀⣹",
+        "⠀⢀⣸",
+        "⠀⣀⣰",
+        "⢀⣀⣠",
+        "⣆⣀⣀",
+        "⣏⣀⡀",
+        "⣏⣉⠀",
+        "⣏⡉⠉",
+        "⣏⠉⠹",
+        "⡏⠉⣹",
+        "⠏⣉⣹",
+        "⣏⣉⣹",
+        "⣟⣋⣹",
+        "⣟⣛⣻",
+        "⣟⣻⣿",
+        "⣿⣿⣿",
+        "⣿⣿⣿",
     ]
 
     def on_mount(self) -> None:
@@ -377,6 +419,7 @@ class NodeStatusCard(Static):
                     latency = (time.time() - start) * 1000
             else:
                 import requests
+
                 start = time.time()
                 resp = requests.get(url, timeout=5)
                 latency = (time.time() - start) * 1000
@@ -386,8 +429,7 @@ class NodeStatusCard(Static):
                     data = resp.json()
                     models = [m["name"] for m in data.get("models", [])]
                     self.app.call_from_thread(
-                        self._update_status, True, latency,
-                        models[0] if models else "none", models
+                        self._update_status, True, latency, models[0] if models else "none", models
                     )
                 except (json.JSONDecodeError, KeyError) as e:
                     log_telemetry("STATUS_ERROR", f"{self.node_key}: Invalid JSON response")
@@ -395,15 +437,19 @@ class NodeStatusCard(Static):
             elif resp.status_code == 404:
                 self.app.call_from_thread(self._update_status, False, 0, "Ollama Not Found", [])
             elif resp.status_code >= 500:
-                self.app.call_from_thread(self._update_status, False, 0, f"Server Error {resp.status_code}", [])
+                self.app.call_from_thread(
+                    self._update_status, False, 0, f"Server Error {resp.status_code}", []
+                )
             else:
-                self.app.call_from_thread(self._update_status, False, 0, f"HTTP {resp.status_code}", [])
+                self.app.call_from_thread(
+                    self._update_status, False, 0, f"HTTP {resp.status_code}", []
+                )
         except ConnectErrors:
-             log_telemetry("STATUS_ERROR", f"{self.node_key}: Connection refused at {url}")
-             self.app.call_from_thread(self._update_status, False, 0, "Connection Refused", [])
+            log_telemetry("STATUS_ERROR", f"{self.node_key}: Connection refused at {url}")
+            self.app.call_from_thread(self._update_status, False, 0, "Connection Refused", [])
         except TimeoutErrors:
-             log_telemetry("STATUS_ERROR", f"{self.node_key}: Timeout after 5s")
-             self.app.call_from_thread(self._update_status, False, 0, "Timeout (5s)", [])
+            log_telemetry("STATUS_ERROR", f"{self.node_key}: Timeout after 5s")
+            self.app.call_from_thread(self._update_status, False, 0, "Timeout (5s)", [])
         except OSError as e:
             log_telemetry("STATUS_ERROR", f"{self.node_key}: Network error - {e}")
             self.app.call_from_thread(self._update_status, False, 0, "Network Error", [])
@@ -482,11 +528,14 @@ class CircuitBreakerPanel(Static):
         state_file.parent.mkdir(parents=True, exist_ok=True)
         try:
             with open(state_file, "w") as f:
-                json.dump({
-                    "trip_count": self.trip_count,
-                    "last_trip": self.trip_time,
-                    "last_glyph": self.trigger_glyph,
-                }, f)
+                json.dump(
+                    {
+                        "trip_count": self.trip_count,
+                        "last_trip": self.trip_time,
+                        "last_glyph": self.trigger_glyph,
+                    },
+                    f,
+                )
         except Exception:
             pass
 
@@ -598,13 +647,14 @@ class GlyphLegend(Static):
             text.append(f" {glyph} ", style=f"bold {color}")
             text.append(f"{meaning}", style=Colors.MUTED)
             if trips:
-
                 text.append(" ⚠", style=Colors.CRIMSON)
             text.append("\n")
         self.update(text)
 
+
 class SystemFooter(Static):
     """Docked footer with system stats and context."""
+
     jetson_load = reactive("…")
     node_latency = reactive("--ms")
 
@@ -613,16 +663,13 @@ class SystemFooter(Static):
 
     @work(thread=True)
     def _refresh_stats(self) -> None:
-        # Get Jetson Load
+        # Get Jetson Load (local file, no SSH needed)
         try:
-            load_res = subprocess.check_output(
-                ["ssh", f"{NODES['jetson'].user}@{NODES['jetson'].ip}", "cat /proc/loadavg"],
-                text=True, timeout=1.5  # Slightly tighter timeout
-            )
-            load = load_res.split()[0]
+            with open("/proc/loadavg", "r") as f:
+                load = f.read().split()[0]
         except Exception:
             load = "‑"
-        
+
         # Get active node latency
         try:
             card = self.app.query_one(f"#node-card-{self.app.active_node}", NodeStatusCard)
@@ -648,13 +695,14 @@ class SystemFooter(Static):
         text.append("F1 HELP", style=f"italic {Colors.MUTED}")
         self.update(text)
 
+
 class CommandZone(Horizontal):
     """Dedicated zone for command input with better focus indicators."""
+
     def compose(self) -> ComposeResult:
         yield Label("▶", id="cmd-indicator")
         yield Input(
-            placeholder="Type a command or ask the Sovereign... (F1 for help)",
-            id="prompt-input"
+            placeholder="Type a command or ask the Sovereign... (F1 for help)", id="prompt-input"
         )
 
     def on_mount(self) -> None:
@@ -670,6 +718,7 @@ class CommandZone(Horizontal):
         self.add_class("blurred")
         self.query_one("#cmd-indicator").update("▶")
 
+
 class InferenceLog(RichLog):
     """Enhanced inference log with glyph detection."""
 
@@ -680,6 +729,7 @@ class InferenceLog(RichLog):
 
     class GlyphDetected(Message):
         """Fired when a sacred glyph is detected."""
+
         def __init__(self, glyph: str, meaning: str, trips_breaker: bool) -> None:
             self.glyph = glyph
             self.meaning = meaning
@@ -717,7 +767,7 @@ class InferenceLog(RichLog):
     def write_token(self, token: str) -> None:
         """Write token fragment and scroll."""
         self._streaming_buffer += token
-        
+
         # Check for glyphs
         glyphs_found = detect_glyphs(token)
         if glyphs_found:
@@ -766,6 +816,7 @@ class InferenceLog(RichLog):
 # ═══════════════════════════════════════════════════════════════════════════════
 #  HELP SCREEN
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class InsightOverlay(ModalScreen):
     """Glyph-reactive insight overlay from vault."""
@@ -840,6 +891,7 @@ Reset with Ctrl+R.
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN APPLICATION
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class SovereignConsole(App):
     """Sovereign Console v2.0"""
@@ -938,9 +990,9 @@ class SovereignConsole(App):
 
         # Hidden area for background node status tracking
         with Container(id="node-status-area"):
-             for key in NODES:
-                 yield NodeStatusCard(key, id=f"node-card-{key}")
-             yield CircuitBreakerPanel(id="circuit-breaker")
+            for key in NODES:
+                yield NodeStatusCard(key, id=f"node-card-{key}")
+            yield CircuitBreakerPanel(id="circuit-breaker")
 
     def on_mount(self) -> None:
         """Initialize."""
@@ -966,7 +1018,9 @@ class SovereignConsole(App):
 
         log.write_system("Type /help for commands, F1 for help")
         log.write_system("The chisel passes warm. †⟡", style=f"italic {Colors.GOLD}")
-        log_telemetry("STARTUP", f"Console initialized, node: {self.active_node}, vault: {VAULT_PATH}")
+        log_telemetry(
+            "STARTUP", f"Console initialized, node: {self.active_node}, vault: {VAULT_PATH}"
+        )
 
         # Auto-focus the input field and verify it exists
         try:
@@ -988,7 +1042,6 @@ class SovereignConsole(App):
     def on_unmount(self) -> None:
         """Clean up on exit to prevent zombie processes."""
         log_telemetry("SHUTDOWN", "Console unmounting, cleaning up intervals")
-
 
     def _switch_node(self, node_key: str) -> None:
         """Switch active node."""
@@ -1066,6 +1119,8 @@ class SovereignConsole(App):
                 self._pull_model(args)
             else:
                 log.write_error("Usage: /pull <model>")
+        elif command == "/test":
+            self._test_inference(args)
         else:
             log.write_error(f"Unknown command: {command}")
 
@@ -1075,10 +1130,10 @@ class SovereignConsole(App):
     def on_idle(self) -> None:
         """Keep focus on input if no other focusable widget is active."""
         if not self.focused or str(self.focused.id) not in ("prompt-input", "inference-log"):
-             try:
-                 self.action_focus_input()
-             except Exception:
-                 pass
+            try:
+                self.action_focus_input()
+            except Exception:
+                pass
 
     def _toggle_chat(self, args: str) -> None:
         """Toggle chat mode."""
@@ -1143,11 +1198,13 @@ class SovereignConsole(App):
                             data = json.loads(line)
                             content = data.get("content", "")
                             if query.lower() in content.lower():
-                                results.append({
-                                    "content": content,
-                                    "domain": data.get("domain", "?"),
-                                    "intensity": data.get("intensity", 0),
-                                })
+                                results.append(
+                                    {
+                                        "content": content,
+                                        "domain": data.get("domain", "?"),
+                                        "intensity": data.get("intensity", 0),
+                                    }
+                                )
                         except json.JSONDecodeError:
                             continue
             except Exception:
@@ -1165,7 +1222,10 @@ class SovereignConsole(App):
         results, files_searched = self._get_vault_search_results(query)
 
         text = Text()
-        text.append(f"\n═══ Results: {len(results)} / {files_searched} files ═══\n", style=f"bold {Colors.GOLD}")
+        text.append(
+            f"\n═══ Results: {len(results)} / {files_searched} files ═══\n",
+            style=f"bold {Colors.GOLD}",
+        )
 
         if not results:
             text.append("\nNo matches found.\n", style=Colors.MUTED)
@@ -1174,9 +1234,9 @@ class SovereignConsole(App):
                 text.append(f"\n[{r['domain']}] ", style=Colors.CYAN)
                 text.append(f"({r['intensity']:.2f})\n", style=Colors.MUTED)
                 # Truncate content for display
-                content = r['content']
+                content = r["content"]
                 if len(content) > 80:
-                     content = content[:80] + "..."
+                    content = content[:80] + "..."
                 text.append(f"  {content}\n", style=Colors.SILVER)
 
             if len(results) > 10:
@@ -1199,7 +1259,7 @@ class SovereignConsole(App):
             self.app.call_from_thread(
                 log.write_system,
                 f"Warning: Insight truncated from {len(content)} to 10000 chars",
-                Colors.MUTED
+                Colors.MUTED,
             )
             content = content[:10000]
 
@@ -1208,10 +1268,7 @@ class SovereignConsole(App):
             try:
                 insight_path.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                self.app.call_from_thread(
-                    log.write_error,
-                    f"Cannot create vault directory: {e}"
-                )
+                self.app.call_from_thread(log.write_error, f"Cannot create vault directory: {e}")
                 return
 
             session_id = f"sess_console_{datetime.now().strftime('%Y%m%d')}"
@@ -1232,29 +1289,20 @@ class SovereignConsole(App):
                 f.write(json.dumps(insight, ensure_ascii=False) + "\n")
 
             self.app.call_from_thread(
-                log.write_system,
-                f"Insight recorded to {file_path.name}",
-                f"bold {Colors.EMERALD}"
+                log.write_system, f"Insight recorded to {file_path.name}", f"bold {Colors.EMERALD}"
             )
             log_telemetry("INSIGHT_RECORDED", f"{len(content)} chars: {content[:50]}")
 
         except PermissionError:
-             self.app.call_from_thread(
-                 log.write_error,
-                 f"Permission denied: Cannot write to {VAULT_PATH}"
-             )
-             log_telemetry("INSIGHT_ERROR", "Permission denied")
-        except OSError as e:
-             self.app.call_from_thread(
-                 log.write_error,
-                 f"File system error: {type(e).__name__}"
-             )
-             log_telemetry("INSIGHT_ERROR", f"OSError: {e}")
-        except Exception as e:
             self.app.call_from_thread(
-                log.write_error,
-                f"Failed to record: {type(e).__name__}"
+                log.write_error, f"Permission denied: Cannot write to {VAULT_PATH}"
             )
+            log_telemetry("INSIGHT_ERROR", "Permission denied")
+        except OSError as e:
+            self.app.call_from_thread(log.write_error, f"File system error: {type(e).__name__}")
+            log_telemetry("INSIGHT_ERROR", f"OSError: {e}")
+        except Exception as e:
+            self.app.call_from_thread(log.write_error, f"Failed to record: {type(e).__name__}")
             log_telemetry("INSIGHT_ERROR", f"Unexpected: {type(e).__name__}: {e}")
 
     @work(thread=True)
@@ -1264,9 +1312,7 @@ class SovereignConsole(App):
         node = NODES[self.active_node]
 
         self.app.call_from_thread(
-            log.write_system,
-            f"Pulling '{model_name}' to {node.name}...",
-            f"bold {Colors.CYAN}"
+            log.write_system, f"Pulling '{model_name}' to {node.name}...", f"bold {Colors.CYAN}"
         )
 
         url = f"http://{node.ip}:{node.port}/api/pull"
@@ -1277,8 +1323,7 @@ class SovereignConsole(App):
                     with client.stream("POST", url, json={"name": model_name}) as resp:
                         if resp.status_code != 200:
                             self.app.call_from_thread(
-                                log.write_error,
-                                f"Pull failed: HTTP {resp.status_code}"
+                                log.write_error, f"Pull failed: HTTP {resp.status_code}"
                             )
                             return
 
@@ -1290,17 +1335,21 @@ class SovereignConsole(App):
                                     if status:
                                         self.app.call_from_thread(log.write_system, f"  {status}")
                                     if data.get("error"):
-                                        self.app.call_from_thread(log.write_error, f"  {data['error']}")
+                                        self.app.call_from_thread(
+                                            log.write_error, f"  {data['error']}"
+                                        )
                                         return
                                 except json.JSONDecodeError:
                                     continue
             else:
                 import requests
-                with requests.post(url, json={"name": model_name}, stream=True, timeout=None) as resp:
+
+                with requests.post(
+                    url, json={"name": model_name}, stream=True, timeout=None
+                ) as resp:
                     if resp.status_code != 200:
                         self.app.call_from_thread(
-                            log.write_error,
-                            f"Pull failed: HTTP {resp.status_code}"
+                            log.write_error, f"Pull failed: HTTP {resp.status_code}"
                         )
                         return
 
@@ -1320,24 +1369,67 @@ class SovereignConsole(App):
             self.app.call_from_thread(
                 log.write_system,
                 f"Model '{model_name}' pulled successfully!",
-                f"bold {Colors.EMERALD}"
+                f"bold {Colors.EMERALD}",
             )
             log_telemetry("MODEL_PULL", f"Success: {model_name} on {node.name}")
 
         except ConnectErrors:
-             self.app.call_from_thread(log.write_error, f"Cannot reach {node.name}")
-             log_telemetry("MODEL_PULL_ERROR", f"Connection error: {node.name}")
+            self.app.call_from_thread(log.write_error, f"Cannot reach {node.name}")
+            log_telemetry("MODEL_PULL_ERROR", f"Connection error: {node.name}")
         except TimeoutErrors:
-             self.app.call_from_thread(log.write_error, "Pull timed out")
-             log_telemetry("MODEL_PULL_ERROR", "Timeout")
+            self.app.call_from_thread(log.write_error, "Pull timed out")
+            log_telemetry("MODEL_PULL_ERROR", "Timeout")
         except Exception as e:
             self.app.call_from_thread(log.write_error, f"Pull failed: {type(e).__name__}")
             log_telemetry("MODEL_PULL_ERROR", f"{type(e).__name__}: {str(e)[:100]}")
 
+    @work(thread=True)
+    def _test_inference(self, prompt: str) -> None:
+        """Test inference using Ollama CLI (local, no HTTP)."""
+        log = self.query_one("#inference-log", InferenceLog)
+        node = NODES[self.active_node]
+
+        # Use local node only for CLI
+        if node.ip != "127.0.0.1" and node.ip != "localhost":
+            self.app.call_from_thread(log.write_error, "CLI mode only works on localhost node")
+            return
+
+        test_prompt = prompt.strip() if prompt else "Hello, are you working?"
+        model = node.default_model or "spiral-v1:latest"
+
+        self.app.call_from_thread(
+            log.write_system, f"Testing '{model}' with CLI...", f"bold {Colors.CYAN}"
+        )
+
+        try:
+            import subprocess
+
+            ollama_path = os.path.expanduser("~/bin/ollama")
+            cmd = [ollama_path, "run", model, test_prompt]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60.0)
+
+            if result.returncode == 0:
+                response = result.stdout.strip()
+                self.app.call_from_thread(log.write_response_start)
+                for token in response.split():
+                    self.app.call_from_thread(log.write_token, token + " ")
+                self.app.call_from_thread(log.write_response_end, len(response.split()), 0.5)
+                self.app.call_from_thread(
+                    log.write_system, "✓ CLI test successful!", f"bold {Colors.EMERALD}"
+                )
+            else:
+                self.app.call_from_thread(log.write_error, f"CLI error: {result.stderr.strip()}")
+
+        except subprocess.TimeoutExpired:
+            self.app.call_from_thread(log.write_error, "CLI timed out (>60s)")
+        except Exception as e:
+            self.app.call_from_thread(log.write_error, f"CLI failed: {e}")
+
+        self.call_later(self.action_focus_input)
 
     @work(thread=True)
     def _run_inference(self, prompt: str) -> None:
-        """Run inference on active node with streaming."""
+        """Run inference on active node - CLI for local, HTTP for remote."""
         node = NODES[self.active_node]
         log = self.query_one("#inference-log", InferenceLog)
         breaker = self.query_one("#circuit-breaker", CircuitBreakerPanel)
@@ -1345,8 +1437,7 @@ class SovereignConsole(App):
         # Check breaker
         if breaker.tripped:
             self.app.call_from_thread(
-                log.write_error,
-                "Circuit breaker tripped. Reset with Ctrl+R."
+                log.write_error, "Circuit breaker tripped. Reset with Ctrl+R."
             )
             log_telemetry("INFERENCE_BLOCKED", "Circuit breaker active")
             return
@@ -1365,44 +1456,85 @@ class SovereignConsole(App):
             model = node.default_model or "spiral-v1:latest"
 
         self.app.call_from_thread(log.write_prompt, prompt, node.name, model)
-        log_telemetry("INFERENCE_START", f"Node: {self.active_node}, Model: {model}, Prompt: {prompt[:50]}")
-
-        # Build request
-        messages = []
-        if self.chat_mode:
-            # Inject system prompt if history is empty
-            if not self.conversation_history:
-                messages.append({"role": "system", "content": SYSTEM_PROMPT})
-            messages.extend(self.conversation_history)
-            messages.append({"role": "user", "content": prompt})
-        else:
-            # For non-chat mode, we still assume a one-off chat structure for tool support if possible,
-            # but standard legacy mode just uses prompt.
-            # To enable tool use, we must use the chat endpoint even for single turns, or structure the prompt.
-            # Let's switch to using chat format for everything to support tools
-            messages.append({"role": "system", "content": SYSTEM_PROMPT})
-            messages.append({"role": "user", "content": prompt})
-
-        # Show spinner immediately
-
-        
-        # We'll use the loop for multi-turn tool use
-        asyncio.run_coroutine_threadsafe(
-            self._process_agent_loop(node, model, messages, start_time=time.time()),
-            self.app._loop
+        log_telemetry(
+            "INFERENCE_START", f"Node: {self.active_node}, Model: {model}, Prompt: {prompt[:50]}"
         )
 
-    async def _process_agent_loop(self, node: NodeConfig, model: str, messages: List[Dict], start_time: float) -> None:
+        # CLI mode for local node (no HTTP server needed!)
+        is_local = node.ip in ("127.0.0.1", "localhost")
+        if is_local:
+            self._run_cli_inference(prompt, model)
+        else:
+            # HTTP mode for remote nodes
+            messages = []
+            if self.chat_mode:
+                if not self.conversation_history:
+                    messages.append({"role": "system", "content": SYSTEM_PROMPT})
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+            else:
+                messages.append({"role": "system", "content": SYSTEM_PROMPT})
+                messages.append({"role": "user", "content": prompt})
+
+            asyncio.run_coroutine_threadsafe(
+                self._process_agent_loop(node, model, messages, start_time=time.time()),
+                self.app._loop,
+            )
+
+    def _run_cli_inference(self, prompt: str, model: str) -> None:
+        """Run inference via Ollama CLI (direct, no HTTP)."""
+        log = self.query_one("#inference-log", InferenceLog)
+
+        try:
+            import subprocess
+
+            ollama_path = os.path.expanduser("~/bin/ollama")
+            cmd = [ollama_path, "run", model, prompt]
+
+            self.app.call_from_thread(log.write_response_start)
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120.0)
+
+            if result.returncode == 0:
+                response = result.stdout.strip()
+                full_response = ""
+                for token in response.split():
+                    full_response += token + " "
+                    self.app.call_from_thread(log.write_token, token + " ")
+
+                self.app.call_from_thread(log.write_response_end, len(response.split()), 0.5)
+
+                # Record in conversation history if chat mode
+                if self.chat_mode:
+                    self.conversation_history.extend(
+                        [
+                            {"role": "user", "content": prompt},
+                            {"role": "assistant", "content": response},
+                        ]
+                    )
+            else:
+                self.app.call_from_thread(log.write_error, f"Ollama error: {result.stderr.strip()}")
+
+        except subprocess.TimeoutExpired:
+            self.app.call_from_thread(log.write_error, "Inference timed out (>120s)")
+        except Exception as e:
+            self.app.call_from_thread(log.write_error, f"Inference failed: {e}")
+
+        self.call_later(self.action_focus_input)
+
+    async def _process_agent_loop(
+        self, node: NodeConfig, model: str, messages: List[Dict], start_time: float
+    ) -> None:
         """Handle the agent inference loop (Model -> Tool -> Model)."""
         log = self.query_one("#inference-log", InferenceLog)
-        
+
         # Max turns to prevent infinite loops
         MAX_TURNS = 3
         current_turn = 0
-        
+
         while current_turn < MAX_TURNS:
             current_turn += 1
-            
+
             # Prepare request
             url = f"http://{node.ip}:{node.port}/api/chat"
             payload = {
@@ -1411,38 +1543,41 @@ class SovereignConsole(App):
                 "stream": True,
                 "keep_alive": -1,
             }
-            
-            # Update history if in chat mode (only user messages and final answers are usually kept, 
+
+            # Update history if in chat mode (only user messages and final answers are usually kept,
             # but for tools we need the intermediate steps in the context of this specific turn)
             # For simplicity, we manage `messages` locally for this loop.
-            
+
             self.app.call_from_thread(log.write_response_start)
-            
+
             full_response = ""
             token_count = 0
-            
+
             try:
                 if HAS_HTTPX:
                     async with httpx.AsyncClient(timeout=node.timeout) as client:
                         async with client.stream("POST", url, json=payload) as resp:
                             if resp.status_code != 200:
-                                self.app.call_from_thread(log.write_error, f"HTTP {resp.status_code}")
+                                self.app.call_from_thread(
+                                    log.write_error, f"HTTP {resp.status_code}"
+                                )
                                 return
-                                
+
                             async for line in resp.aiter_lines():
-                                if not line: continue
+                                if not line:
+                                    continue
                                 try:
                                     data = json.loads(line)
                                     if "error" in data:
                                         self.app.call_from_thread(log.write_error, data["error"])
                                         return
-                                    
+
                                     token = data.get("message", {}).get("content", "")
                                     if token:
                                         full_response += token
                                         token_count += 1
                                         self.app.call_from_thread(log.write_token, token)
-                                        
+
                                 except json.JSONDecodeError:
                                     continue
                 else:
@@ -1454,24 +1589,28 @@ class SovereignConsole(App):
 
                 duration = time.time() - start_time
                 self.app.call_from_thread(log.write_response_end, token_count, duration)
-                
+
                 # Check for tool call
                 # Simple regex or parsing for <tool_call>...
-                tool_match = re.search(r'<tool_call>(.*?)</tool_call>', full_response, re.DOTALL)
-                
+                tool_match = re.search(r"<tool_call>(.*?)</tool_call>", full_response, re.DOTALL)
+
                 if tool_match:
                     tool_json = tool_match.group(1)
                     try:
                         tool_data = json.loads(tool_json)
                         tool_name = tool_data.get("name")
                         tool_query = tool_data.get("query")
-                        
-                        self.app.call_from_thread(log.write_system, f"🛠️ Tool Invoked: {tool_name}('{tool_query}')", Colors.CYAN)
-                        
+
+                        self.app.call_from_thread(
+                            log.write_system,
+                            f"🛠️ Tool Invoked: {tool_name}('{tool_query}')",
+                            Colors.CYAN,
+                        )
+
                         if tool_name == "search_vault":
                             # Execute tool
                             results, _ = self._get_vault_search_results(tool_query)
-                            
+
                             # Format output
                             if results:
                                 tool_output = f"Managed {len(results)} results:\n"
@@ -1479,29 +1618,35 @@ class SovereignConsole(App):
                                     tool_output += f"- [{r['domain']}] {r['content'][:200]}...\n"
                             else:
                                 tool_output = "No results found."
-                                
+
                             # Append to messages and loop
                             messages.append({"role": "assistant", "content": full_response})
                             messages.append({"role": "tool", "content": tool_output})
-                            
-                            self.app.call_from_thread(log.write_system, f"🔍 Tool Output: {len(tool_output)} chars", Colors.MUTED)
-                            continue # Next loop iteration with tool output
-                            
+
+                            self.app.call_from_thread(
+                                log.write_system,
+                                f"🔍 Tool Output: {len(tool_output)} chars",
+                                Colors.MUTED,
+                            )
+                            continue  # Next loop iteration with tool output
+
                     except json.JSONDecodeError:
                         self.app.call_from_thread(log.write_error, "Failed to parse tool call")
-            
+
             except Exception as e:
                 self.app.call_from_thread(log.write_error, f"Agent Loop Error: {e}")
                 return
 
             # If we get here, no tool call was found, so we are done
             if self.chat_mode:
-                 self.conversation_history.extend(messages[-1:]) # Append only the final assistant response? 
-                 # Actually, for conversation history, we usually just want the logical flow.
-                 # If we had tool use, we should probably record the whole chain or just the result.
-                 # For now, let's just append the user prompt (already added in caller) and the final response.
-                 # Wait, 'messages' has everything.
-                 self.conversation_history = messages
+                self.conversation_history.extend(
+                    messages[-1:]
+                )  # Append only the final assistant response?
+                # Actually, for conversation history, we usually just want the logical flow.
+                # If we had tool use, we should probably record the whole chain or just the result.
+                # For now, let's just append the user prompt (already added in caller) and the final response.
+                # Wait, 'messages' has everything.
+                self.conversation_history = messages
             break
 
     @on(InferenceLog.GlyphDetected)
@@ -1531,7 +1676,6 @@ class SovereignConsole(App):
         """Show help."""
         self.push_screen(HelpScreen())
 
-
     def action_scroll_log_up(self) -> None:
         """Scroll inference log up one page."""
         try:
@@ -1552,6 +1696,7 @@ class SovereignConsole(App):
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def main():
     """Run the Sovereign Console."""
