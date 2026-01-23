@@ -82,13 +82,9 @@ class CacheBuilder:
             for term, data in inverted_index.items()
         }
 
-        session_map_json = {
-            session: sorted(list(files)) for session, files in session_map.items()
-        }
+        session_map_json = {session: sorted(list(files)) for session, files in session_map.items()}
 
-        domain_map_json = {
-            domain: sorted(list(files)) for domain, files in domain_map.items()
-        }
+        domain_map_json = {domain: sorted(list(files)) for domain, files in domain_map.items()}
 
         # Write cache files
         with open(self.cache_dir / "inverted_index.json", "w") as f:

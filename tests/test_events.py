@@ -24,7 +24,7 @@ class TestVaultEvents:
         event_id = events.append_event(
             event_type="file.created",
             payload={"path": "/test/file.txt", "size": 100},
-            session_id="sess_test"
+            session_id="sess_test",
         )
 
         assert event_id is not None
@@ -54,7 +54,7 @@ class TestVaultEvents:
             session_id="sess_test",
             intensity=0.85,
             context="Testing",
-            builds_on=["ins_prior"]
+            builds_on=["ins_prior"],
         )
 
         assert insight_id.startswith("ins_")
@@ -76,9 +76,7 @@ class TestVaultEvents:
         """Test that recording insight creates domain directory."""
         events = VaultEvents(temp_vault)
         events.record_insight(
-            content="New domain insight",
-            domain="new_domain",
-            session_id="sess_test"
+            content="New domain insight", domain="new_domain", session_id="sess_test"
         )
 
         domain_dir = events.chronicle / "insights" / "new_domain"
@@ -92,7 +90,7 @@ class TestVaultEvents:
             why="Misunderstood the API",
             correction="Use the correct command",
             session_id="sess_test",
-            prevents=["api_confusion"]
+            prevents=["api_confusion"],
         )
 
         assert learning_id.startswith("learn_")
@@ -117,7 +115,7 @@ class TestVaultEvents:
             what_changed="Now I understand the pattern",
             why="Working through the problem",
             session_id="sess_test",
-            intensity=0.9
+            intensity=0.9,
         )
 
         assert trans_id.startswith("trans_")
@@ -137,8 +135,7 @@ class TestVaultEvents:
         """Test creating a state snapshot."""
         events = VaultEvents(temp_vault)
         snap_id = events.create_snapshot(
-            session_id="sess_test",
-            state={"tasks": ["task1", "task2"], "files": ["/a.txt"]}
+            session_id="sess_test", state={"tasks": ["task1", "task2"], "files": ["/a.txt"]}
         )
 
         assert snap_id.startswith("snap_")

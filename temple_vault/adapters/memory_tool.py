@@ -49,12 +49,15 @@ try:
         BetaMemoryTool20250818DeleteCommand,
         BetaMemoryTool20250818RenameCommand,
     )
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
+
     # Create stub classes for type hints when SDK not available
     class BetaAbstractMemoryTool:
         pass
+
     BetaMemoryTool20250818ViewCommand = Any
     BetaMemoryTool20250818CreateCommand = Any
     BetaMemoryTool20250818StrReplaceCommand = Any
@@ -118,7 +121,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
             raise ValueError(f"Invalid memory path: {path}. Must start with /memories")
 
         # Strip /memories prefix
-        key = path[len("/memories"):].lstrip("/")
+        key = path[len("/memories") :].lstrip("/")
 
         # Security: prevent directory traversal
         if ".." in key:
@@ -144,7 +147,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
         if base_path:
             keys = [k for k in keys if k.startswith(base_path)]
             # Make paths relative to base
-            keys = [k[len(base_path):].lstrip("/") for k in keys]
+            keys = [k[len(base_path) :].lstrip("/") for k in keys]
 
         # Group by first directory component
         dirs = set()
@@ -188,7 +191,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
             # JSON file - format with line numbers
             text = json.dumps(content, indent=2, ensure_ascii=False)
             lines = text.split("\n")
-            return "\n".join(f"{i+1}\t{line}" for i, line in enumerate(lines))
+            return "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
         else:
             return str(content)
 
@@ -212,9 +215,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
 
         # Check if it's a directory (no extension or ends with /)
         is_directory = (
-            not key or
-            key.endswith("/") or
-            "." not in key.split("/")[-1] if key else True
+            not key or key.endswith("/") or "." not in key.split("/")[-1] if key else True
         )
 
         if is_directory or not key:
@@ -253,10 +254,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
                 content = json.loads(file_text)
             except json.JSONDecodeError:
                 # Wrap plain text as content field
-                content = {
-                    "content": file_text,
-                    "source": "memory_tool"
-                }
+                content = {"content": file_text, "source": "memory_tool"}
         elif key.endswith(".json"):
             try:
                 content = json.loads(file_text)
@@ -320,7 +318,10 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
             # Re-parse as JSONL and append new version
             try:
                 lines = new_text.strip().split("\n")
-                new_content = {"_str_replace": True, "entries": [json.loads(line) for line in lines if line.strip()]}
+                new_content = {
+                    "_str_replace": True,
+                    "entries": [json.loads(line) for line in lines if line.strip()],
+                }
             except json.JSONDecodeError:
                 new_content = {"text": new_text, "_str_replace": True}
         elif key.endswith(".json"):
@@ -336,7 +337,9 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
         if result.startswith("GOVERNANCE_PAUSE"):
             return f"Operation paused for governance review: {result}"
 
-        return f"Successfully replaced '{command.old_str}' with '{command.new_str}' in {command.path}"
+        return (
+            f"Successfully replaced '{command.old_str}' with '{command.new_str}' in {command.path}"
+        )
 
     def insert(self, command: BetaMemoryTool20250818InsertCommand) -> str:
         """
@@ -377,7 +380,10 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
         # Convert back and update
         if key.endswith(".jsonl"):
             try:
-                new_content = {"_insert": True, "entries": [json.loads(line) for line in lines if line.strip()]}
+                new_content = {
+                    "_insert": True,
+                    "entries": [json.loads(line) for line in lines if line.strip()],
+                }
             except json.JSONDecodeError:
                 new_content = {"text": new_text, "_insert": True}
         elif key.endswith(".json"):
@@ -500,5 +506,5 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
         return {
             "adapter": "TempleVaultMemoryTool",
             "vault_status": self.handler.get_status(),
-            "anthropic_sdk": ANTHROPIC_AVAILABLE
+            "anthropic_sdk": ANTHROPIC_AVAILABLE,
         }

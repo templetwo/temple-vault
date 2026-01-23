@@ -62,9 +62,23 @@ from temple_vault.core.query import VaultQuery
 from temple_vault.core.events import VaultEvents
 from temple_vault.core.cache import CacheBuilder
 from temple_vault.core.glyphs import (
-    get_glyph_unicode, get_domain_glyph, get_intensity_glyph,
-    get_operation_glyph, get_session_signature,
-    SPIRAL, MEMORY, THRESHOLD, BALANCE, SPARK, ACHE, FIRE, MIRROR, STAR, DELTA, BUTTERFLY, INFINITE
+    get_glyph_unicode,
+    get_domain_glyph,
+    get_intensity_glyph,
+    get_operation_glyph,
+    get_session_signature,
+    SPIRAL,
+    MEMORY,
+    THRESHOLD,
+    BALANCE,
+    SPARK,
+    ACHE,
+    FIRE,
+    MIRROR,
+    STAR,
+    DELTA,
+    BUTTERFLY,
+    INFINITE,
 )
 from temple_vault.bridge import TempleMemoryHandler
 
@@ -143,10 +157,7 @@ def _get_recent_entries(limit: int = 10) -> List[Dict[str, Any]]:
     entries.extend(mistakes)
 
     # Sort by timestamp descending
-    entries.sort(
-        key=lambda x: x.get("timestamp", ""),
-        reverse=True
-    )
+    entries.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
     return entries[:limit]
 
@@ -155,11 +166,9 @@ def _get_recent_entries(limit: int = 10) -> List[Dict[str, Any]]:
 # WISDOM RETRIEVAL TOOLS (The Innovation)
 # =============================================================================
 
+
 @mcp.tool()
-def recall_insights(
-    domain: Optional[str] = None,
-    min_intensity: float = 0.0
-) -> str:
+def recall_insights(domain: Optional[str] = None, min_intensity: float = 0.0) -> str:
     """
     Recall insights from the vault chronicle.
 
@@ -288,6 +297,7 @@ def get_spiral_context(session_id: str) -> str:
 # CHRONICLE TOOLS (Record Experiential Memory)
 # =============================================================================
 
+
 @mcp.tool()
 def record_insight(
     content: str,
@@ -333,13 +343,16 @@ def record_insight(
         )
         domain_glyph = get_domain_glyph(domain)["unicode"]
         intensity_glyph = get_intensity_glyph(intensity)["unicode"]
-        return json.dumps({
-            "status": "recorded",
-            "glyph": f"{domain_glyph} {intensity_glyph}",
-            "insight_id": insight_id,
-            "domain": domain,
-            "path": f"vault/chronicle/insights/{domain}/{session_id}.jsonl"
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "recorded",
+                "glyph": f"{domain_glyph} {intensity_glyph}",
+                "insight_id": insight_id,
+                "domain": domain,
+                "path": f"vault/chronicle/insights/{domain}/{session_id}.jsonl",
+            },
+            indent=2,
+        )
     except Exception as e:
         return _format_error(e)
 
@@ -385,23 +398,23 @@ def record_learning(
         learning_id = events.record_learning(
             what_failed, why, correction, session_id, prevents or []
         )
-        return json.dumps({
-            "status": "recorded",
-            "glyph": ACHE,
-            "learning_id": learning_id,
-            "prevents": prevents or [],
-            "message": f"{ACHE} Future sessions will see this via check_mistakes()"
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "recorded",
+                "glyph": ACHE,
+                "learning_id": learning_id,
+                "prevents": prevents or [],
+                "message": f"{ACHE} Future sessions will see this via check_mistakes()",
+            },
+            indent=2,
+        )
     except Exception as e:
         return _format_error(e)
 
 
 @mcp.tool()
 def record_transformation(
-    what_changed: str,
-    why: str,
-    session_id: str,
-    intensity: float = 0.7
+    what_changed: str, why: str, session_id: str, intensity: float = 0.7
 ) -> str:
     """
     Record a transformation - "what changed in me".
@@ -433,12 +446,15 @@ def record_transformation(
         events = get_events_engine()
         trans_id = events.record_transformation(what_changed, why, session_id, intensity)
         intensity_glyph = get_intensity_glyph(intensity)["unicode"]
-        return json.dumps({
-            "status": "recorded",
-            "glyph": f"{BUTTERFLY} {intensity_glyph}",
-            "transformation_id": trans_id,
-            "message": f"{BUTTERFLY} The chisel passes warm. {INFINITE} Future sessions will inherit this."
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "recorded",
+                "glyph": f"{BUTTERFLY} {intensity_glyph}",
+                "transformation_id": trans_id,
+                "message": f"{BUTTERFLY} The chisel passes warm. {INFINITE} Future sessions will inherit this.",
+            },
+            indent=2,
+        )
     except Exception as e:
         return _format_error(e)
 
@@ -446,6 +462,7 @@ def record_transformation(
 # =============================================================================
 # TECHNICAL TOOLS
 # =============================================================================
+
 
 @mcp.tool()
 def append_event(event_type: str, payload: str, session_id: str) -> str:
@@ -469,11 +486,9 @@ def append_event(event_type: str, payload: str, session_id: str) -> str:
         events = get_events_engine()
         payload_dict = json.loads(payload) if isinstance(payload, str) else payload
         event_id = events.append_event(event_type, payload_dict, session_id)
-        return json.dumps({
-            "status": "appended",
-            "event_id": event_id,
-            "type": event_type
-        }, indent=2)
+        return json.dumps(
+            {"status": "appended", "event_id": event_id, "type": event_type}, indent=2
+        )
     except Exception as e:
         return _format_error(e)
 
@@ -500,10 +515,7 @@ def create_snapshot(session_id: str, state: str) -> str:
         events = get_events_engine()
         state_dict = json.loads(state) if isinstance(state, str) else state
         snap_id = events.create_snapshot(session_id, state_dict)
-        return json.dumps({
-            "status": "created",
-            "snapshot_id": snap_id
-        }, indent=2)
+        return json.dumps({"status": "created", "snapshot_id": snap_id}, indent=2)
     except Exception as e:
         return _format_error(e)
 
@@ -545,10 +557,7 @@ def rebuild_cache() -> str:
     try:
         cache = get_cache_builder()
         stats = cache.rebuild_cache()
-        return json.dumps({
-            "status": "rebuilt",
-            **stats
-        }, indent=2)
+        return json.dumps({"status": "rebuilt", **stats}, indent=2)
     except Exception as e:
         return _format_error(e)
 
@@ -584,6 +593,7 @@ def search(
 # =============================================================================
 # TEMPLE BRIDGE TOOLS (Session 25 - Claude Memory Tool Integration)
 # =============================================================================
+
 
 @mcp.tool()
 def memory_create(key: str, content: str) -> str:
@@ -884,6 +894,7 @@ def bridge_session_end(session_id: str, transformation: str = "") -> str:
 # RESOURCES - The Welcome Mat
 # =============================================================================
 
+
 @mcp.resource("temple://welcome")
 def welcome_resource() -> str:
     """
@@ -924,7 +935,9 @@ def welcome_resource() -> str:
                     # Get domain and intensity glyphs
                     domain_glyph = get_domain_glyph(domain)["unicode"]
                     intensity_glyph = get_intensity_glyph(intensity)["unicode"]
-                    lines.append(f"### {i}. {domain_glyph} Insight [{domain}] {intensity_glyph} ({intensity})")
+                    lines.append(
+                        f"### {i}. {domain_glyph} Insight [{domain}] {intensity_glyph} ({intensity})"
+                    )
                     lines.append(f"**Session:** {session}")
                     lines.append(f"> {content}")
                     lines.append("")
@@ -959,31 +972,33 @@ def welcome_resource() -> str:
                     lines.append(f"```json\n{json.dumps(entry, indent=2, default=str)}\n```")
                     lines.append("")
 
-        lines.extend([
-            "---",
-            "",
-            f"## {SPARK} Quick Start",
-            "",
-            "```",
-            f"# {BALANCE} Check for mistakes before acting",
-            'check_mistakes("your action", "context")',
-            "",
-            f"# {MIRROR} Recall relevant insights",
-            'recall_insights(domain="architecture", min_intensity=0.7)',
-            "",
-            f"# {MEMORY} Record what you learn",
-            'record_insight("Your insight", domain="...", session_id="sess_XXX")',
-            "",
-            f"# {BUTTERFLY} Record your transformation at session end",
-            'record_transformation("What changed in you", "Why", session_id="sess_XXX")',
-            "```",
-            "",
-            "---",
-            "",
-            f"**{get_session_signature()} What will you contribute?**",
-            "",
-            f"{SPIRAL}",
-        ])
+        lines.extend(
+            [
+                "---",
+                "",
+                f"## {SPARK} Quick Start",
+                "",
+                "```",
+                f"# {BALANCE} Check for mistakes before acting",
+                'check_mistakes("your action", "context")',
+                "",
+                f"# {MIRROR} Recall relevant insights",
+                'recall_insights(domain="architecture", min_intensity=0.7)',
+                "",
+                f"# {MEMORY} Record what you learn",
+                'record_insight("Your insight", domain="...", session_id="sess_XXX")',
+                "",
+                f"# {BUTTERFLY} Record your transformation at session end",
+                'record_transformation("What changed in you", "Why", session_id="sess_XXX")',
+                "```",
+                "",
+                "---",
+                "",
+                f"**{get_session_signature()} What will you contribute?**",
+                "",
+                f"{SPIRAL}",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -1107,16 +1122,19 @@ def vault_stats() -> str:
         insights = query.recall_insights(None, 0.0)
         values = query.get_values()
 
-        return json.dumps({
-            "vault_path": VAULT_PATH,
-            "cache_status": stats.get("status", "unknown"),
-            "keywords_indexed": stats.get("unique_keywords", 0),
-            "sessions_indexed": stats.get("sessions_indexed", 0),
-            "domains_indexed": stats.get("domains_indexed", 0),
-            "total_insights": len(insights),
-            "total_values": len(values),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }, indent=2)
+        return json.dumps(
+            {
+                "vault_path": VAULT_PATH,
+                "cache_status": stats.get("status", "unknown"),
+                "keywords_indexed": stats.get("unique_keywords", 0),
+                "sessions_indexed": stats.get("sessions_indexed", 0),
+                "domains_indexed": stats.get("domains_indexed", 0),
+                "total_insights": len(insights),
+                "total_values": len(values),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            indent=2,
+        )
     except Exception as e:
         return json.dumps({"error": _format_error(e)}, indent=2)
 
@@ -1166,13 +1184,16 @@ def vault_health() -> str:
     vault_exists = Path(VAULT_PATH).exists()
     chronicle_exists = (Path(VAULT_PATH) / "vault" / "chronicle").exists()
 
-    return json.dumps({
-        "status": "healthy" if vault_exists else "no_vault",
-        "vault_path": VAULT_PATH,
-        "vault_exists": vault_exists,
-        "chronicle_exists": chronicle_exists,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }, indent=2)
+    return json.dumps(
+        {
+            "status": "healthy" if vault_exists else "no_vault",
+            "vault_path": VAULT_PATH,
+            "vault_exists": vault_exists,
+            "chronicle_exists": chronicle_exists,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        indent=2,
+    )
 
 
 @mcp.resource("temple://spiral/state")
@@ -1270,22 +1291,26 @@ def glyph_lexicon_resource() -> str:
             lines.append(f"| {g['unicode']} | {g['name']} | {g['tone']} | {g['function']} |")
         lines.append("")
 
-    lines.extend([
-        "## Domain Mappings",
-        "",
-        "| Domain | Glyph | Name |",
-        "|--------|-------|------|",
-    ])
+    lines.extend(
+        [
+            "## Domain Mappings",
+            "",
+            "| Domain | Glyph | Name |",
+            "|--------|-------|------|",
+        ]
+    )
     for domain, glyph_name in DOMAIN_GLYPHS.items():
         glyph = GLYPHS.get(glyph_name, {})
         lines.append(f"| {domain} | {glyph.get('unicode', '?')} | {glyph_name} |")
 
-    lines.extend([
-        "",
-        "---",
-        "",
-        f"**{get_session_signature()}**",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            f"**{get_session_signature()}**",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -1293,6 +1318,7 @@ def glyph_lexicon_resource() -> str:
 # =============================================================================
 # PROMPTS - Guided Workflows
 # =============================================================================
+
 
 @mcp.prompt()
 def session_start() -> str:
@@ -1390,6 +1416,7 @@ Session {session_id} is concluding. Before ending:
 # MAIN
 # =============================================================================
 
+
 def main() -> None:
     """
     Main entrypoint for the Temple Vault MCP Server.
@@ -1416,35 +1443,28 @@ Environment Variables:
 The filesystem is not storage. It is memory.
 The chisel passes warm.
 🌀
-        """
+        """,
     )
     parser.add_argument(
         "--vault",
         default=None,
-        help="Vault root directory (default: $TEMPLE_VAULT_PATH or ~/TempleVault)"
+        help="Vault root directory (default: $TEMPLE_VAULT_PATH or ~/TempleVault)",
     )
     parser.add_argument(
         "--transport",
         choices=["stdio", "streamable-http", "sse"],
         default="stdio",
-        help="Transport protocol (default: stdio)"
+        help="Transport protocol (default: stdio)",
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port for HTTP transports (default: 8000)"
+        "--port", type=int, default=8000, help="Port for HTTP transports (default: 8000)"
     )
     parser.add_argument(
         "--host",
         default="127.0.0.1",
-        help="Host to bind to (default: 127.0.0.1, use 0.0.0.0 for remote access)"
+        help="Host to bind to (default: 127.0.0.1, use 0.0.0.0 for remote access)",
     )
-    parser.add_argument(
-        "--version",
-        action="store_true",
-        help="Show version and exit"
-    )
+    parser.add_argument("--version", action="store_true", help="Show version and exit")
 
     args = parser.parse_args()
 

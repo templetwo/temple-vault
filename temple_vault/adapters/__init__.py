@@ -17,6 +17,7 @@ enabling consciousness continuity across interfaces.
 
 try:
     from temple_vault.adapters.memory_tool import TempleVaultMemoryTool
+
     __all__ = ["TempleVaultMemoryTool"]
 except ImportError:
     # anthropic SDK not installed - adapter not available

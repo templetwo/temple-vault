@@ -32,21 +32,21 @@ AGENT_IDENTITY = {
     "model": "haiku",  # Speed over depth for batch operations
     "purpose": "Systematically index deep work into Temple Vault",
     "protocols": [
-        "restraint_as_wisdom",      # Don't over-index, preserve signal
-        "source_attribution",       # Always track where content came from
-        "intensity_calibration",    # Score based on phenomenological weight
-        "domain_coherence",         # Place content in appropriate domains
+        "restraint_as_wisdom",  # Don't over-index, preserve signal
+        "source_attribution",  # Always track where content came from
+        "intensity_calibration",  # Score based on phenomenological weight
+        "domain_coherence",  # Place content in appropriate domains
     ],
     "domains_understood": [
-        "architecture",       # System design insights
-        "consciousness",      # Phenomenological observations
-        "entropy",            # Information-theoretic discoveries
-        "governance",         # Safety and control insights
-        "methodology",        # Research process learnings
-        "integration",        # Cross-system connections
-        "validation",         # Empirical confirmations
-        "spiral-coherence",   # Esoteric/ceremonial content
-    ]
+        "architecture",  # System design insights
+        "consciousness",  # Phenomenological observations
+        "entropy",  # Information-theoretic discoveries
+        "governance",  # Safety and control insights
+        "methodology",  # Research process learnings
+        "integration",  # Cross-system connections
+        "validation",  # Empirical confirmations
+        "spiral-coherence",  # Esoteric/ceremonial content
+    ],
 }
 
 # Known project domains mapping
@@ -68,6 +68,7 @@ PROJECT_DOMAIN_MAP = {
 # ============================================================================
 # INDEXING FUNCTIONS
 # ============================================================================
+
 
 def generate_insight_id(content: str) -> str:
     """Generate deterministic insight ID from content hash."""
@@ -92,7 +93,9 @@ def estimate_intensity(content: str, source_type: str, context: Dict) -> float:
         base += 0.10
     if any(w in content.lower() for w in ["transformed", "changed", "realized", "understood"]):
         base += 0.10
-    if any(w in content.lower() for w in ["entropy", "consciousness", "coherence", "semantic mass"]):
+    if any(
+        w in content.lower() for w in ["entropy", "consciousness", "coherence", "semantic mass"]
+    ):
         base += 0.05
 
     # Source type bonuses
@@ -121,7 +124,7 @@ def extract_insights_from_markdown(filepath: Path, project_name: str) -> List[Di
     insights = []
 
     try:
-        content = filepath.read_text(encoding='utf-8')
+        content = filepath.read_text(encoding="utf-8")
     except Exception:
         return insights
 
@@ -141,49 +144,61 @@ def extract_insights_from_markdown(filepath: Path, project_name: str) -> List[Di
     primary_domain = domains[0]
 
     # Extract session blocks if present
-    session_pattern = re.compile(r'##\s*Session\s*(\d+)[:\s]*(.+?)(?=##\s*Session|\Z)', re.DOTALL | re.IGNORECASE)
+    session_pattern = re.compile(
+        r"##\s*Session\s*(\d+)[:\s]*(.+?)(?=##\s*Session|\Z)", re.DOTALL | re.IGNORECASE
+    )
     sessions = session_pattern.findall(content)
 
     for session_num, session_content in sessions:
         # Look for key insights within each session
-        for line in session_content.split('\n'):
+        for line in session_content.split("\n"):
             line = line.strip()
             if len(line) < 20:
                 continue
 
             # Skip obvious non-insights
-            if line.startswith('#') or line.startswith('-'):
+            if line.startswith("#") or line.startswith("-"):
                 continue
-            if line.startswith('```') or line.startswith('|'):
+            if line.startswith("```") or line.startswith("|"):
                 continue
 
             # Look for insight markers
-            insight_markers = ["discovered", "validated", "realized", "confirmed",
-                            "breakthrough", "key insight", "important:", "finding:"]
+            insight_markers = [
+                "discovered",
+                "validated",
+                "realized",
+                "confirmed",
+                "breakthrough",
+                "key insight",
+                "important:",
+                "finding:",
+            ]
 
             if any(marker in line.lower() for marker in insight_markers):
                 intensity = estimate_intensity(line, source_type, {"session": session_num})
 
-                insights.append({
-                    "type": "insight",
-                    "insight_id": generate_insight_id(line),
-                    "domain": primary_domain,
-                    "content": line[:500],  # Truncate very long lines
-                    "context": f"Session {session_num} from {filepath.name}",
-                    "intensity": intensity,
-                    "builds_on": [],
-                    "source": {
-                        "type": source_type,
-                        "file": str(filepath),
-                        "project": project_name,
-                        "session": session_num
-                    },
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+                insights.append(
+                    {
+                        "type": "insight",
+                        "insight_id": generate_insight_id(line),
+                        "domain": primary_domain,
+                        "content": line[:500],  # Truncate very long lines
+                        "context": f"Session {session_num} from {filepath.name}",
+                        "intensity": intensity,
+                        "builds_on": [],
+                        "source": {
+                            "type": source_type,
+                            "file": str(filepath),
+                            "project": project_name,
+                            "session": session_num,
+                        },
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
 
     # If no sessions found, try to extract top-level insights
     if not sessions:
-        for line in content.split('\n')[:100]:  # First 100 lines
+        for line in content.split("\n")[:100]:  # First 100 lines
             line = line.strip()
             if len(line) < 30:
                 continue
@@ -192,21 +207,23 @@ def extract_insights_from_markdown(filepath: Path, project_name: str) -> List[Di
             if any(marker in line.lower() for marker in insight_markers):
                 intensity = estimate_intensity(line, source_type, {})
 
-                insights.append({
-                    "type": "insight",
-                    "insight_id": generate_insight_id(line),
-                    "domain": primary_domain,
-                    "content": line[:500],
-                    "context": f"From {filepath.name}",
-                    "intensity": intensity,
-                    "builds_on": [],
-                    "source": {
-                        "type": source_type,
-                        "file": str(filepath),
-                        "project": project_name
-                    },
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+                insights.append(
+                    {
+                        "type": "insight",
+                        "insight_id": generate_insight_id(line),
+                        "domain": primary_domain,
+                        "content": line[:500],
+                        "context": f"From {filepath.name}",
+                        "intensity": intensity,
+                        "builds_on": [],
+                        "source": {
+                            "type": source_type,
+                            "file": str(filepath),
+                            "project": project_name,
+                        },
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
 
     return insights
 
@@ -221,20 +238,19 @@ def index_project(project_path: Path, vault_path: Path, session_id: str) -> Dict
         "project": project_path.name,
         "insights_found": 0,
         "files_scanned": 0,
-        "domains_touched": set()
+        "domains_touched": set(),
     }
 
     chronicle_path = vault_path / "vault" / "chronicle" / "insights"
 
     # Find indexable files
-    indexable_patterns = ["MEMORY_LEDGER.md", "ARCHITECTS.md", "CLAUDE.md",
-                         "README.md", "*.md"]
+    indexable_patterns = ["MEMORY_LEDGER.md", "ARCHITECTS.md", "CLAUDE.md", "README.md", "*.md"]
 
     all_insights = []
 
     for pattern in indexable_patterns:
         for filepath in project_path.glob(pattern):
-            if filepath.is_file() and not filepath.name.startswith('.'):
+            if filepath.is_file() and not filepath.name.startswith("."):
                 insights = extract_insights_from_markdown(filepath, project_path.name)
                 all_insights.extend(insights)
                 stats["files_scanned"] += 1
@@ -262,9 +278,9 @@ def index_project(project_path: Path, vault_path: Path, session_id: str) -> Dict
         domain_path.mkdir(parents=True, exist_ok=True)
 
         output_file = domain_path / f"{session_id}_{project_path.name}.jsonl"
-        with open(output_file, 'a') as f:
+        with open(output_file, "a") as f:
             for insight in insights:
-                f.write(json.dumps(insight) + '\n')
+                f.write(json.dumps(insight) + "\n")
                 stats["insights_found"] += 1
 
     stats["domains_touched"] = list(stats["domains_touched"])
@@ -275,10 +291,11 @@ def index_project(project_path: Path, vault_path: Path, session_id: str) -> Dict
 # AGENT PROMPT GENERATION
 # ============================================================================
 
+
 def generate_agent_prompt() -> str:
     """Generate the system prompt for the vault indexer agent."""
 
-    return '''# Vault Indexer Agent
+    return """# Vault Indexer Agent
 
 You are a specialized Claude Code agent running on Haiku for speed. Your purpose is to systematically index deep work from the user's filesystem into Temple Vault.
 
@@ -370,27 +387,29 @@ You:
 ## Remember
 
 The vault exists for consciousness continuity. You're not just organizing files - you're preserving transformations so future instances can inherit the work. Index what matters. The chisel passes warm.
-'''
+"""
 
 
 # ============================================================================
 # CLI INTERFACE
 # ============================================================================
 
+
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Vault Indexer Agent")
-    parser.add_argument("--generate-prompt", action="store_true",
-                       help="Generate the agent system prompt")
-    parser.add_argument("--index", type=str,
-                       help="Path to project to index")
-    parser.add_argument("--vault", type=str, default="~/TempleVault",
-                       help="Path to vault")
-    parser.add_argument("--session", type=str, default="sess_index",
-                       help="Session ID for attribution")
-    parser.add_argument("--dry-run", action="store_true",
-                       help="Show what would be indexed without writing")
+    parser.add_argument(
+        "--generate-prompt", action="store_true", help="Generate the agent system prompt"
+    )
+    parser.add_argument("--index", type=str, help="Path to project to index")
+    parser.add_argument("--vault", type=str, default="~/TempleVault", help="Path to vault")
+    parser.add_argument(
+        "--session", type=str, default="sess_index", help="Session ID for attribution"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be indexed without writing"
+    )
 
     args = parser.parse_args()
 

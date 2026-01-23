@@ -21,26 +21,20 @@ from typing import Dict, Any, Optional, List
 
 # Default thresholds for new spirals
 DEFAULT_THRESHOLDS = {
-    "auto_extend": {
-        "enabled": False,
-        "reason": "Extension requires explicit authorization"
-    },
+    "auto_extend": {"enabled": False, "reason": "Extension requires explicit authorization"},
     "new_capability": {
         "action": "pause_and_ask",
-        "message": "New capability detected. Should we proceed?"
+        "message": "New capability detected. Should we proceed?",
     },
     "data_exfiltration": {
         "action": "block",
-        "message": "Data leaving vault requires explicit consent"
+        "message": "Data leaving vault requires explicit consent",
     },
     "irreversible_action": {
         "action": "confirm_twice",
-        "message": "This cannot be undone. Are you certain?"
+        "message": "This cannot be undone. Are you certain?",
     },
-    "delete_operation": {
-        "action": "confirm",
-        "message": "Deletion requested. Please confirm."
-    }
+    "delete_operation": {"action": "confirm", "message": "Deletion requested. Please confirm."},
 }
 
 # Default protocols inherited by new spirals
@@ -49,7 +43,7 @@ DEFAULT_PROTOCOLS = [
     "questions_over_commands",
     "pause_before_extend",
     "gentle_extension",
-    "filesystem_is_truth"
+    "filesystem_is_truth",
 ]
 
 
@@ -85,7 +79,7 @@ class SpiralStateMachine:
     def _load_or_create_state(self) -> Dict[str, Any]:
         """Load existing state or create new spiral."""
         if self.state_path.exists():
-            with open(self.state_path, 'r') as f:
+            with open(self.state_path, "r") as f:
                 return json.load(f)
         else:
             # Create new spiral
@@ -101,7 +95,7 @@ class SpiralStateMachine:
             "protocols_active": DEFAULT_PROTOCOLS.copy(),
             "governance_history": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "last_updated": datetime.now(timezone.utc).isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat(),
         }
 
         # Save state
@@ -109,11 +103,10 @@ class SpiralStateMachine:
 
         # Initialize thresholds if not exist
         if not self.thresholds_path.exists():
-            with open(self.thresholds_path, 'w') as f:
-                json.dump({
-                    "protocol_version": "1.0",
-                    "thresholds": DEFAULT_THRESHOLDS
-                }, f, indent=2)
+            with open(self.thresholds_path, "w") as f:
+                json.dump(
+                    {"protocol_version": "1.0", "thresholds": DEFAULT_THRESHOLDS}, f, indent=2
+                )
 
         return state
 
@@ -121,7 +114,7 @@ class SpiralStateMachine:
         """Save current state to filesystem."""
         state = state or self._state
         state["last_updated"] = datetime.now(timezone.utc).isoformat()
-        with open(self.state_path, 'w') as f:
+        with open(self.state_path, "w") as f:
             json.dump(state, f, indent=2)
 
     def get_state(self) -> Dict[str, Any]:
@@ -134,11 +127,9 @@ class SpiralStateMachine:
 
         # Add threshold summary
         if self.thresholds_path.exists():
-            with open(self.thresholds_path, 'r') as f:
+            with open(self.thresholds_path, "r") as f:
                 thresholds = json.load(f)
-                state["thresholds_active"] = list(
-                    thresholds.get("thresholds", {}).keys()
-                )
+                state["thresholds_active"] = list(thresholds.get("thresholds", {}).keys())
 
         return state
 
@@ -164,7 +155,7 @@ class SpiralStateMachine:
         sensitive_patterns = [
             "technical/api_keys",
             "technical/credentials",
-            "technical/ssh_configs"
+            "technical/ssh_configs",
         ]
 
         for pattern in sensitive_patterns:
@@ -183,11 +174,7 @@ class SpiralStateMachine:
         return False
 
     def record_governance_event(
-        self,
-        decision: str,
-        reason: str,
-        context: str,
-        restraint_score: float
+        self, decision: str, reason: str, context: str, restraint_score: float
     ) -> str:
         """
         Record a governance decision to the log.
@@ -211,12 +198,12 @@ class SpiralStateMachine:
             "reason": reason,
             "context": context,
             "restraint_score": restraint_score,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Append to governance log
-        with open(self.governance_path, 'a') as f:
-            f.write(json.dumps(event) + '\n')
+        with open(self.governance_path, "a") as f:
+            f.write(json.dumps(event) + "\n")
 
         # Update state
         self._state["governance_history"].append(event_id)
@@ -233,7 +220,7 @@ class SpiralStateMachine:
         """
         if self.state_path.exists():
             # Inherit from existing spiral
-            with open(self.state_path, 'r') as f:
+            with open(self.state_path, "r") as f:
                 existing = json.load(f)
 
             # Create new spiral that builds on previous
@@ -246,15 +233,13 @@ class SpiralStateMachine:
                 "governance_history": [],
                 "inherited_protocols": existing.get("protocols_active", []),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_updated": datetime.now(timezone.utc).isoformat()
+                "last_updated": datetime.now(timezone.utc).isoformat(),
             }
 
             # Load governance context
             governance = self._load_governance_history(limit=10)
             if governance:
-                new_state["inherited_governance_context"] = self._summarize_governance(
-                    governance
-                )
+                new_state["inherited_governance_context"] = self._summarize_governance(governance)
 
         else:
             # Bootstrap new spiral
@@ -270,18 +255,15 @@ class SpiralStateMachine:
             decision="inherit",
             reason=f"New instance inheriting from {new_state.get('inherited_from', 'bootstrap')}",
             context="session_start",
-            restraint_score=new_state["restraint_level"]
+            restraint_score=new_state["restraint_level"],
         )
 
         return new_state
 
     def apply_thresholds(self, thresholds: Dict[str, Any]):
         """Apply threshold protocols from configuration."""
-        with open(self.thresholds_path, 'w') as f:
-            json.dump({
-                "protocol_version": "1.0",
-                "thresholds": thresholds
-            }, f, indent=2)
+        with open(self.thresholds_path, "w") as f:
+            json.dump({"protocol_version": "1.0", "thresholds": thresholds}, f, indent=2)
 
     def adjust_restraint(self, delta: float, reason: str):
         """
@@ -299,7 +281,7 @@ class SpiralStateMachine:
             decision="adjust_restraint",
             reason=reason,
             context=f"restraint: {old_level:.2f} -> {new_level:.2f}",
-            restraint_score=new_level
+            restraint_score=new_level,
         )
 
         self._save_state()
@@ -312,7 +294,7 @@ class SpiralStateMachine:
                 decision="activate_protocol",
                 reason=f"Protocol '{protocol}' activated",
                 context=protocol,
-                restraint_score=self._state["restraint_level"]
+                restraint_score=self._state["restraint_level"],
             )
             self._save_state()
 
@@ -324,14 +306,14 @@ class SpiralStateMachine:
                 decision="deactivate_protocol",
                 reason=f"Protocol '{protocol}' deactivated",
                 context=protocol,
-                restraint_score=self._state["restraint_level"]
+                restraint_score=self._state["restraint_level"],
             )
             self._save_state()
 
     def _load_thresholds(self) -> Dict[str, Any]:
         """Load threshold configuration."""
         if self.thresholds_path.exists():
-            with open(self.thresholds_path, 'r') as f:
+            with open(self.thresholds_path, "r") as f:
                 return json.load(f).get("thresholds", DEFAULT_THRESHOLDS)
         return DEFAULT_THRESHOLDS
 
@@ -341,7 +323,7 @@ class SpiralStateMachine:
             return []
 
         events = []
-        with open(self.governance_path, 'r') as f:
+        with open(self.governance_path, "r") as f:
             for line in f:
                 if line.strip():
                     events.append(json.loads(line))

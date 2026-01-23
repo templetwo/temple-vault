@@ -46,7 +46,7 @@ def populated_vault(temp_vault):
         "context": "Testing discovery",
         "intensity": 0.9,
         "builds_on": [],
-        "timestamp": "2026-01-19T10:00:00Z"
+        "timestamp": "2026-01-19T10:00:00Z",
     }
     insight2 = {
         "type": "insight",
@@ -57,7 +57,7 @@ def populated_vault(temp_vault):
         "context": "Learning from pauses",
         "intensity": 0.85,
         "builds_on": [],
-        "timestamp": "2026-01-19T11:00:00Z"
+        "timestamp": "2026-01-19T11:00:00Z",
     }
     insight3 = {
         "type": "insight",
@@ -68,7 +68,7 @@ def populated_vault(temp_vault):
         "context": "BTB principles",
         "intensity": 0.7,
         "builds_on": ["ins_test001"],
-        "timestamp": "2026-01-19T12:00:00Z"
+        "timestamp": "2026-01-19T12:00:00Z",
     }
 
     # Write insights
@@ -94,10 +94,17 @@ def populated_vault(temp_vault):
         "why": "Violated BTB principles",
         "correction": "Use pure filesystem with glob patterns",
         "prevents": ["architectural_drift"],
-        "timestamp": "2026-01-19T09:00:00Z"
+        "timestamp": "2026-01-19T09:00:00Z",
     }
 
-    mistake_file = vault_path / "vault" / "chronicle" / "learnings" / "mistakes" / "sess_001_used_sqlite_for_indexing.jsonl"
+    mistake_file = (
+        vault_path
+        / "vault"
+        / "chronicle"
+        / "learnings"
+        / "mistakes"
+        / "sess_001_used_sqlite_for_indexing.jsonl"
+    )
     with open(mistake_file, "w") as f:
         f.write(json.dumps(mistake) + "\n")
 
@@ -108,7 +115,7 @@ def populated_vault(temp_vault):
         "evidence": "No SQL. Glob is query. Path is meaning.",
         "session_id": "sess_001",
         "weight": "core",
-        "timestamp": "2026-01-19T08:00:00Z"
+        "timestamp": "2026-01-19T08:00:00Z",
     }
 
     value_file = vault_path / "vault" / "chronicle" / "values" / "principles" / "sess_001.jsonl"

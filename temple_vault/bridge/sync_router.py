@@ -74,19 +74,19 @@ class HybridSyncRouter:
     def _load_state(self) -> Dict[str, Any]:
         """Load sync state from filesystem."""
         if self.state_path.exists():
-            with open(self.state_path, 'r') as f:
+            with open(self.state_path, "r") as f:
                 return json.load(f)
         return {
             "last_sync": None,
             "pending_count": 0,
             "conflict_count": 0,
             "cloud_enabled": False,  # Disabled until cloud backend configured
-            "cloud_backend": None
+            "cloud_backend": None,
         }
 
     def _save_state(self):
         """Save sync state to filesystem."""
-        with open(self.state_path, 'w') as f:
+        with open(self.state_path, "w") as f:
             json.dump(self._state, f, indent=2)
 
     def classify_tier(self, key: str) -> str:
@@ -142,11 +142,11 @@ class HybridSyncRouter:
             "tier": tier,
             "queued_at": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
-            "content_hash": self._hash_content(content) if content else None
+            "content_hash": self._hash_content(content) if content else None,
         }
 
-        with open(self.pending_path, 'a') as f:
-            f.write(json.dumps(entry) + '\n')
+        with open(self.pending_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
         self._state["pending_count"] = self._state.get("pending_count", 0) + 1
         self._save_state()
@@ -157,7 +157,7 @@ class HybridSyncRouter:
             return []
 
         pending = []
-        with open(self.pending_path, 'r') as f:
+        with open(self.pending_path, "r") as f:
             for line in f:
                 if line.strip():
                     item = json.loads(line)
@@ -176,16 +176,11 @@ class HybridSyncRouter:
             return {
                 "status": "disabled",
                 "message": "Cloud sync not configured. Items queued locally.",
-                "pending_count": self._state.get("pending_count", 0)
+                "pending_count": self._state.get("pending_count", 0),
             }
 
         pending = self.get_pending()
-        results = {
-            "synced": 0,
-            "conflicts": 0,
-            "skipped": 0,
-            "errors": []
-        }
+        results = {"synced": 0, "conflicts": 0, "skipped": 0, "errors": []}
 
         for item in pending:
             tier = item.get("tier", "default")
@@ -249,9 +244,7 @@ class HybridSyncRouter:
         return self._cloud_fetch(key)
 
     def configure_cloud(
-        self,
-        backend: str,
-        credentials: Optional[Dict[str, Any]] = None
+        self, backend: str, credentials: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Configure cloud backend for sync.
@@ -273,7 +266,7 @@ class HybridSyncRouter:
             # Store credentials in technical/ (never synced)
             creds_path = self.vault_root / "memories" / "technical" / "sync_credentials.json"
             creds_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(creds_path, 'w') as f:
+            with open(creds_path, "w") as f:
                 json.dump(credentials, f, indent=2)
 
         self._save_state()
@@ -281,7 +274,7 @@ class HybridSyncRouter:
         return {
             "status": "configured",
             "backend": backend,
-            "cloud_enabled": self._state["cloud_enabled"]
+            "cloud_enabled": self._state["cloud_enabled"],
         }
 
     def get_status(self) -> Dict[str, Any]:
@@ -291,7 +284,7 @@ class HybridSyncRouter:
             "cloud_backend": self._state.get("cloud_backend"),
             "last_sync": self._state.get("last_sync"),
             "pending_count": self._state.get("pending_count", 0),
-            "conflict_count": self._state.get("conflict_count", 0)
+            "conflict_count": self._state.get("conflict_count", 0),
         }
 
     def get_conflicts(self) -> List[Dict[str, Any]]:
@@ -300,7 +293,7 @@ class HybridSyncRouter:
             return []
 
         conflicts = []
-        with open(self.conflicts_path, 'r') as f:
+        with open(self.conflicts_path, "r") as f:
             for line in f:
                 if line.strip():
                     conflict = json.loads(line)
@@ -308,12 +301,7 @@ class HybridSyncRouter:
                         conflicts.append(conflict)
         return conflicts
 
-    def resolve_conflict(
-        self,
-        key: str,
-        resolution: str,
-        keep: str = "local"
-    ) -> Dict[str, Any]:
+    def resolve_conflict(self, key: str, resolution: str, keep: str = "local") -> Dict[str, Any]:
         """
         Resolve a sync conflict.
 
@@ -329,7 +317,7 @@ class HybridSyncRouter:
         # For now, just mark as resolved
         if self.conflicts_path.exists():
             conflicts = []
-            with open(self.conflicts_path, 'r') as f:
+            with open(self.conflicts_path, "r") as f:
                 for line in f:
                     if line.strip():
                         conflict = json.loads(line)
@@ -340,9 +328,9 @@ class HybridSyncRouter:
                         conflicts.append(conflict)
 
             # Rewrite conflicts file
-            with open(self.conflicts_path, 'w') as f:
+            with open(self.conflicts_path, "w") as f:
                 for conflict in conflicts:
-                    f.write(json.dumps(conflict) + '\n')
+                    f.write(json.dumps(conflict) + "\n")
 
             self._state["conflict_count"] = max(0, self._state["conflict_count"] - 1)
             self._save_state()
@@ -408,11 +396,11 @@ class HybridSyncRouter:
             "detected_at": datetime.now(timezone.utc).isoformat(),
             "local_hash": conflict.get("local_hash"),
             "cloud_hash": conflict.get("cloud_hash"),
-            "resolved": False
+            "resolved": False,
         }
 
-        with open(self.conflicts_path, 'a') as f:
-            f.write(json.dumps(entry) + '\n')
+        with open(self.conflicts_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
     def _mark_synced(self, item: Dict[str, Any]):
         """Mark an item as synced in the pending queue."""
@@ -421,23 +409,27 @@ class HybridSyncRouter:
             return
 
         remaining = []
-        with open(self.pending_path, 'r') as f:
+        with open(self.pending_path, "r") as f:
             for line in f:
                 if line.strip():
                     pending = json.loads(line)
-                    if pending.get("key") == item["key"] and pending.get("queued_at") == item["queued_at"]:
+                    if (
+                        pending.get("key") == item["key"]
+                        and pending.get("queued_at") == item["queued_at"]
+                    ):
                         pending["status"] = "synced"
                         pending["synced_at"] = datetime.now(timezone.utc).isoformat()
                     remaining.append(pending)
 
-        with open(self.pending_path, 'w') as f:
+        with open(self.pending_path, "w") as f:
             for pending in remaining:
-                f.write(json.dumps(pending) + '\n')
+                f.write(json.dumps(pending) + "\n")
 
     def _hash_content(self, content: Optional[Dict]) -> Optional[str]:
         """Generate hash of content for conflict detection."""
         if content is None:
             return None
         import hashlib
+
         content_str = json.dumps(content, sort_keys=True)
         return hashlib.sha256(content_str.encode()).hexdigest()[:16]

@@ -46,17 +46,12 @@ class VaultQuery:
         for file in files:
             entries = self._load_jsonl(Path(file))
             for entry in entries:
-                if (
-                    entry.get("type") == "insight"
-                    and entry.get("intensity", 0) >= min_intensity
-                ):
+                if entry.get("type") == "insight" and entry.get("intensity", 0) >= min_intensity:
                     results.append(entry)
 
         return results
 
-    def check_mistakes(
-        self, action: str, context: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    def check_mistakes(self, action: str, context: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Check for documented mistakes related to an action.
 
@@ -153,9 +148,7 @@ class VaultQuery:
                     lineage_chain = entry.get("lineage_chain", [])
 
         # Extract session IDs from lineage chain
-        related_sessions = [
-            item.split("_")[1] if "_" in item else item for item in lineage_chain
-        ]
+        related_sessions = [item.split("_")[1] if "_" in item else item for item in lineage_chain]
 
         return {
             "session_id": session_id,

@@ -30,9 +30,7 @@ class VaultEvents:
         session_dir.mkdir(parents=True, exist_ok=True)
         return session_dir
 
-    def append_event(
-        self, event_type: str, payload: Dict[str, Any], session_id: str
-    ) -> str:
+    def append_event(self, event_type: str, payload: Dict[str, Any], session_id: str) -> str:
         """
         Append event to session's JSONL stream.
 
@@ -251,9 +249,7 @@ class VaultEvents:
 
         return snap_id
 
-    def get_latest_snapshot(
-        self, session_id: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+    def get_latest_snapshot(self, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get latest snapshot (for session or globally).
 

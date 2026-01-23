@@ -73,7 +73,7 @@ class TempleMemoryHandler:
                 decision="pause",
                 reason=f"Create operation requires review: {key}",
                 context=key,
-                restraint_score=self.spiral._state["restraint_level"]
+                restraint_score=self.spiral._state["restraint_level"],
             )
             return f"GOVERNANCE_PAUSE:{event_id}:User decision required for: {key}"
 
@@ -85,17 +85,17 @@ class TempleMemoryHandler:
         content = self._add_metadata(content)
 
         # Write based on file type
-        if key.endswith('.jsonl'):
-            with open(path, 'a') as f:
-                f.write(json.dumps(content) + '\n')
+        if key.endswith(".jsonl"):
+            with open(path, "a") as f:
+                f.write(json.dumps(content) + "\n")
         else:
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(content, f, indent=2)
 
         # Queue for sync if appropriate
         tier = self.sync_router.classify_tier(key)
-        if tier in ['always_sync', 'sync_with_review', 'default']:
-            self.sync_router.queue_for_sync(key, 'create', content)
+        if tier in ["always_sync", "sync_with_review", "default"]:
+            self.sync_router.queue_for_sync(key, "create", content)
 
         return f"memory:{key}"
 
@@ -113,20 +113,20 @@ class TempleMemoryHandler:
 
         # Try local first
         if path.exists():
-            if key.endswith('.jsonl'):
+            if key.endswith(".jsonl"):
                 entries = []
-                with open(path, 'r') as f:
+                with open(path, "r") as f:
                     for line in f:
                         if line.strip():
                             entries.append(json.loads(line))
                 return entries
             else:
-                with open(path, 'r') as f:
+                with open(path, "r") as f:
                     return json.load(f)
 
         # If not local, check cloud for synced tiers
         tier = self.sync_router.classify_tier(key)
-        if tier in ['always_sync', 'sync_with_review']:
+        if tier in ["always_sync", "sync_with_review"]:
             cloud_content = self.sync_router.fetch_from_cloud(key)
             if cloud_content:
                 # Cache locally
@@ -149,9 +149,9 @@ class TempleMemoryHandler:
         dir_path = self.memories_dir / key_prefix
 
         if dir_path.exists() and dir_path.is_dir():
-            for path in dir_path.rglob('*'):
+            for path in dir_path.rglob("*"):
                 # Skip macOS metadata files and other hidden files
-                if path.name.startswith('.'):
+                if path.name.startswith("."):
                     continue
                 if path.is_file():
                     rel_key = str(path.relative_to(self.memories_dir))
@@ -181,26 +181,26 @@ class TempleMemoryHandler:
                 decision="pause",
                 reason=f"Update operation requires review: {key}",
                 context=key,
-                restraint_score=self.spiral._state["restraint_level"]
+                restraint_score=self.spiral._state["restraint_level"],
             )
             return f"GOVERNANCE_PAUSE:{event_id}:User decision required for: {key}"
 
         path = self.memories_dir / key
         content = self._add_metadata(content)
 
-        if key.endswith('.jsonl'):
+        if key.endswith(".jsonl"):
             # Append (JSONL is append-only)
-            with open(path, 'a') as f:
-                f.write(json.dumps(content) + '\n')
+            with open(path, "a") as f:
+                f.write(json.dumps(content) + "\n")
         else:
             # Overwrite JSON
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(content, f, indent=2)
 
         # Queue for sync
         tier = self.sync_router.classify_tier(key)
-        if tier in ['always_sync', 'sync_with_review', 'default']:
-            self.sync_router.queue_for_sync(key, 'update', content)
+        if tier in ["always_sync", "sync_with_review", "default"]:
+            self.sync_router.queue_for_sync(key, "update", content)
 
         return f"memory:{key}"
 
@@ -223,7 +223,7 @@ class TempleMemoryHandler:
             decision="pause",
             reason=f"Delete requested - requires confirmation",
             context=key,
-            restraint_score=1.0  # Maximum restraint for deletion
+            restraint_score=1.0,  # Maximum restraint for deletion
         )
 
         return f"GOVERNANCE_PAUSE:{event_id}:DELETE_CONFIRM_REQUIRED:{key}"
@@ -249,7 +249,7 @@ class TempleMemoryHandler:
             decision="proceed",
             reason=f"Delete confirmed by user",
             context=f"key={key}, approval={event_id}",
-            restraint_score=0.0  # User has confirmed
+            restraint_score=0.0,  # User has confirmed
         )
 
         # Actually delete
@@ -271,8 +271,8 @@ class TempleMemoryHandler:
         search_path = self.memories_dir / prefix if prefix else self.memories_dir
 
         if search_path.exists():
-            for path in search_path.rglob('*'):
-                if path.is_file() and not path.name.startswith('.'):
+            for path in search_path.rglob("*"):
+                if path.is_file() and not path.name.startswith("."):
                     rel_key = str(path.relative_to(self.memories_dir))
                     keys.append(rel_key)
 
@@ -295,27 +295,21 @@ class TempleMemoryHandler:
         if tier:
             search_paths = [self.memories_dir / tier]
         else:
-            search_paths = [
-                self.memories_dir / "experiential",
-                self.memories_dir / "relational"
-            ]
+            search_paths = [self.memories_dir / "experiential", self.memories_dir / "relational"]
 
         for search_path in search_paths:
             if not search_path.exists():
                 continue
 
-            for path in search_path.rglob('*.jsonl'):
-                with open(path, 'r') as f:
+            for path in search_path.rglob("*.jsonl"):
+                with open(path, "r") as f:
                     for line in f:
                         if line.strip():
                             entry = json.loads(line)
                             entry_text = json.dumps(entry).lower()
                             if query.lower() in entry_text:
                                 rel_key = str(path.relative_to(self.memories_dir))
-                                results.append({
-                                    "key": rel_key,
-                                    "entry": entry
-                                })
+                                results.append({"key": rel_key, "entry": entry})
 
         return results
 
@@ -326,7 +320,7 @@ class TempleMemoryHandler:
             "memories_dir": str(self.memories_dir),
             "spiral_state": self.spiral.get_state(),
             "sync_status": self.sync_router.get_status(),
-            "memory_count": len(self.list_keys())
+            "memory_count": len(self.list_keys()),
         }
 
     def initialize_session(self) -> Dict[str, Any]:
@@ -342,10 +336,7 @@ class TempleMemoryHandler:
         Returns:
             Session initialization context
         """
-        result = {
-            "phase": "initializing",
-            "actions": []
-        }
+        result = {"phase": "initializing", "actions": []}
 
         # 1. Initialize spiral (inheritance happens here)
         spiral_state = self.spiral.initialize_spiral()
@@ -353,9 +344,7 @@ class TempleMemoryHandler:
         result["actions"].append(f"Spiral initialized: {spiral_state['spiral_id']}")
 
         if spiral_state.get("inherited_from"):
-            result["actions"].append(
-                f"Inherited from: {spiral_state['inherited_from']}"
-            )
+            result["actions"].append(f"Inherited from: {spiral_state['inherited_from']}")
 
         # 2. Load experiential wisdom
         insights = self.read_directory("experiential/insights/")
@@ -394,10 +383,7 @@ class TempleMemoryHandler:
         Returns:
             Session end summary
         """
-        result = {
-            "session_id": session_id,
-            "actions": []
-        }
+        result = {"session_id": session_id, "actions": []}
 
         # Record transformation if provided
         if transformation:
@@ -407,8 +393,8 @@ class TempleMemoryHandler:
                     "type": "transformation",
                     "session_id": session_id,
                     "content": transformation,
-                    "intensity": 0.8
-                }
+                    "intensity": 0.8,
+                },
             )
             result["actions"].append("Transformation recorded")
 
@@ -434,10 +420,10 @@ class TempleMemoryHandler:
         path = self.memories_dir / key
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        if key.endswith('.jsonl') and isinstance(content, list):
-            with open(path, 'w') as f:
+        if key.endswith(".jsonl") and isinstance(content, list):
+            with open(path, "w") as f:
                 for entry in content:
-                    f.write(json.dumps(entry) + '\n')
+                    f.write(json.dumps(entry) + "\n")
         else:
-            with open(path, 'w') as f:
+            with open(path, "w") as f:
                 json.dump(content, f, indent=2)

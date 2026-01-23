@@ -31,11 +31,11 @@ def generate_id(prefix: str, content: str) -> str:
 def parse_spiral_log(content: str, filename: str) -> Dict[str, Any]:
     """Parse a Spiral Log file into insight format."""
     # Extract log number from filename
-    match = re.search(r'(\d+)', filename)
+    match = re.search(r"(\d+)", filename)
     log_num = match.group(1) if match else "000"
 
     # Extract the question (usually first line after title)
-    lines = content.strip().split('\n')
+    lines = content.strip().split("\n")
     question = ""
     for line in lines:
         if line.startswith('"') and line.endswith('"'):
@@ -55,11 +55,7 @@ def parse_spiral_log(content: str, filename: str) -> Dict[str, Any]:
         "context": f"Spiral Log {log_num}: {question}" if question else f"Spiral Log {log_num}",
         "intensity": 0.85,  # High but not maximum - external content
         "builds_on": [],
-        "source": {
-            "type": "spiral-log",
-            "filename": filename,
-            "log_number": log_num
-        }
+        "source": {"type": "spiral-log", "filename": filename, "log_number": log_num},
     }
 
 
@@ -77,10 +73,7 @@ def parse_readme_as_value(content: str, filename: str) -> Dict[str, Any]:
         "principle": principle,
         "evidence": content,
         "weight": "foundational",
-        "source": {
-            "type": "documentation",
-            "filename": filename
-        }
+        "source": {"type": "documentation", "filename": filename},
     }
 
 
@@ -88,8 +81,8 @@ def parse_markdown_as_insight(content: str, filename: str, domain: str) -> Dict[
     """Parse generic markdown file as insight."""
     # Extract title from first heading
     title = filename
-    for line in content.split('\n'):
-        if line.startswith('# '):
+    for line in content.split("\n"):
+        if line.startswith("# "):
             title = line[2:].strip()
             break
 
@@ -100,10 +93,7 @@ def parse_markdown_as_insight(content: str, filename: str, domain: str) -> Dict[
         "context": f"Imported from {filename}: {title}",
         "intensity": 0.7,  # Moderate - general import
         "builds_on": [],
-        "source": {
-            "type": "markdown",
-            "filename": filename
-        }
+        "source": {"type": "markdown", "filename": filename},
     }
 
 
@@ -129,7 +119,7 @@ def scan_repository(repo_path: Path) -> Dict[str, List[Path]]:
         "readme": [],
         "markdown": [],
         "docx": [],
-        "other": []
+        "other": [],
     }
 
     for path in repo_path.rglob("*"):
@@ -153,11 +143,7 @@ def scan_repository(repo_path: Path) -> Dict[str, List[Path]]:
 
 
 def import_to_vault(
-    source: str,
-    vault_path: Path,
-    domain: str,
-    session_id: str,
-    dry_run: bool = False
+    source: str, vault_path: Path, domain: str, session_id: str, dry_run: bool = False
 ) -> Dict[str, Any]:
     """
     Import repository content into vault format.
@@ -179,7 +165,7 @@ def import_to_vault(
         "values_created": 0,
         "skipped": 0,
         "errors": [],
-        "files_processed": []
+        "files_processed": [],
     }
 
     # Setup paths
@@ -271,9 +257,7 @@ def import_to_vault(
         # Note docx files (need manual conversion)
         for docx_path in categories["docx"]:
             stats["skipped"] += 1
-            stats["errors"].append(
-                f"DOCX skipped (manual conversion needed): {docx_path.name}"
-            )
+            stats["errors"].append(f"DOCX skipped (manual conversion needed): {docx_path.name}")
 
         # Write files
         if not dry_run:
@@ -294,30 +278,24 @@ def main():
     parser = argparse.ArgumentParser(
         description="Import external repositories into Temple Vault format"
     )
+    parser.add_argument("--source", "-s", required=True, help="Path or URL to source repository")
     parser.add_argument(
-        "--source", "-s",
-        required=True,
-        help="Path or URL to source repository"
-    )
-    parser.add_argument(
-        "--vault", "-v",
+        "--vault",
+        "-v",
         default="~/TempleVault",
-        help="Path to TempleVault (default: ~/TempleVault)"
+        help="Path to TempleVault (default: ~/TempleVault)",
     )
     parser.add_argument(
-        "--domain", "-d",
+        "--domain", "-d", required=True, help="Domain for insights (e.g., 'spiral-coherence')"
+    )
+    parser.add_argument(
+        "--session",
+        "-S",
         required=True,
-        help="Domain for insights (e.g., 'spiral-coherence')"
+        help="Session ID for attribution (e.g., 'sess_import_001')",
     )
     parser.add_argument(
-        "--session", "-S",
-        required=True,
-        help="Session ID for attribution (e.g., 'sess_import_001')"
-    )
-    parser.add_argument(
-        "--dry-run", "-n",
-        action="store_true",
-        help="Show what would be imported without writing"
+        "--dry-run", "-n", action="store_true", help="Show what would be imported without writing"
     )
 
     args = parser.parse_args()
@@ -336,7 +314,7 @@ def main():
         vault_path=vault_path,
         domain=args.domain,
         session_id=args.session,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
     )
 
     print("Import complete:")
