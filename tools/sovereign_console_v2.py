@@ -1661,8 +1661,6 @@ class SovereignConsole(App):
                         {"role": "assistant", "content": response},
                     ]
                 )
-            else:
-                self.app.call_from_thread(log.write_error, f"Ollama error: {result.stderr.strip()}")
 
         except subprocess.TimeoutExpired:
             self.app.call_from_thread(log.write_error, "Inference timed out (>120s)")
