@@ -1570,12 +1570,11 @@ class SovereignConsole(App):
                     self.app.call_from_thread(log.write_error, "CLI returned empty response")
                     return
 
-                full_response = ""
-                for token in response.split():
-                    full_response += token + " "
-                    self.app.call_from_thread(log.write_token, token + " ")
+                # Write the full response as a single block, not word-by-word
+                self.app.call_from_thread(log.write_token, response)
 
-                self.app.call_from_thread(log.write_response_end, len(response.split()), 0.5)
+                token_count = len(response.split())
+                self.app.call_from_thread(log.write_response_end, token_count, 0.5)
 
                 # Record in conversation history if chat mode
                 if self.chat_mode:
