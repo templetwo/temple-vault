@@ -24,6 +24,7 @@ from collections import deque
 # HTTP client setup
 try:
     import httpx
+    import aiofiles  # For async FS on Jetson
     HAS_HTTPX = True
     ConnectErrors = (httpx.ConnectError,)
     TimeoutErrors = (httpx.TimeoutException,)
@@ -581,8 +582,9 @@ class GlyphLegend(Static):
         text.append("─" * 20 + "\n", style=Colors.MUTED)
         for glyph, (meaning, color, trips) in list(GLYPHS.items())[:6]:
             text.append(f" {glyph} ", style=f"bold {color}")
-            text.append(f"{meaning[:12]}", style=Colors.MUTED)
+            text.append(f"{meaning}", style=Colors.MUTED)
             if trips:
+
                 text.append(" ⚠", style=Colors.CRIMSON)
             text.append("\n")
         self.update(text)
@@ -603,6 +605,10 @@ class InferenceLog(RichLog):
             self.meaning = meaning
             self.trips_breaker = trips_breaker
             super().__init__()
+
+    def on_glyph_detected(self, event: GlyphDetected) -> None:
+        """Show insight overlay on glyph detect."""
+        self.push_screen(InsightOverlay(event.glyph, event.meaning, event.trips_breaker))
 
     def write_prompt(self, prompt: str, node_name: str, model: str = "") -> None:
         """Write user prompt."""
@@ -697,6 +703,26 @@ class InferenceLog(RichLog):
 #  HELP SCREEN
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class InsightOverlay(ModalScreen):
+    """Glyph-reactive insight overlay from vault."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close"),
+        Binding("q", "dismiss", "Close"),
+    ]
+
+    def __init__(self, glyph: str, meaning: str, trips: bool, **kwargs):
+        super().__init__(**kwargs)
+        self.glyph = glyph
+        self.meaning = meaning
+        self.trips = trips
+
+    def compose(self) -> ComposeResult:
+        color = "red" if self.trips else "gold"
+        text = f"# {self.glyph} Insight\n\n**Meaning:** {self.meaning}\n\n*Vault-sourced context for glyph harmony.*"
+        yield Markdown(text, id="insight-content")
+
+
 class HelpScreen(ModalScreen):
     """Help modal."""
 
@@ -755,8 +781,8 @@ class SovereignConsole(App):
     """Sovereign Console v2.0"""
 
     # CSS with direct hex colors (no variables)
-    CSS = """
-    Screen {
+    CSS = r"""
+    Screen {  # Raw for CSS escapes
         background: #0a0a14;
         layout: vertical;
     }
@@ -896,20 +922,13 @@ class SovereignConsole(App):
         width: 1fr;
         height: 1;
         min-height: 1;
-        border: solid #5a5a7a;
         background: #2d2d44;
         color: #FFFFFF;
-        padding: 0 1;
+        border: none;
     }
 
     #prompt-input:focus {
-        border: double #FFD700;
-        background: #1a1a2e;
-        color: #FFFFFF;
-    }
-
-    #prompt-input:hover {
-        border: solid #FFD700;
+        border: none;
     }
 
     Input {
