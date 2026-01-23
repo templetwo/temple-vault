@@ -44,7 +44,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [\n    "pytest>=7.0.0",\n    "pytest-asyncio>=0.21.0",\n    "black>=23.0.0",\n    "ruff>=0.1.0",\n    "mypy>=1.8.0",\n    "aiofiles>=23.2.1",\n    "textual[dev]>=0.40.0",\n    "httpx>=0.27.0",\n]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "aiofiles>=23.2.1",
+    "textual[dev]>=0.40.0",
+    "httpx>=0.27.0",
+]
 anthropic = [
     "anthropic>=0.40.0",
 ]
@@ -71,10 +80,9 @@ target-version = ['py39']
 line-length = 100
 select = ["E", "F", "I"]
 ignore = ["E501"]
-formatter = "ruff"  # Canonical formatter for CI
 
 [tool.ruff.format]
-quote-style = "double"  # Align with Black defaults
+quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
