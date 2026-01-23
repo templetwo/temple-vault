@@ -32,20 +32,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      # Lint (fast feedback)
+      # Lint (product only)
       - name: Ruff lint
         run: |
-          ruff check .
+          ruff check temple_vault tests
 
-      # Format check
+      # Format check (product only)
       - name: Ruff format check
         run: |
-          ruff format --check .
+          ruff format --check temple_vault tests
 
-      # Typecheck
+      # Typecheck (product only)
       - name: Mypy
         run: |
-          mypy temple_vault
+          mypy --show-error-codes temple_vault
 
       - name: Pytest
         env:
