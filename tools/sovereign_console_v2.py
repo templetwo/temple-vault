@@ -603,23 +603,72 @@ class GlyphLegend(Static):
             text.append("\n")
         self.update(text)
 
-class JetsonLoadMonitor(Static):
-    """Displays live CPU/GPU load of the Jetson node."""
-    load = reactive("…")
-    
+class SystemFooter(Static):
+    """Docked footer with system stats and context."""
+    jetson_load = reactive("…")
+    node_latency = reactive("--ms")
+
     def on_mount(self) -> None:
-        # Poll every second
-        self.set_interval(1.0, self._refresh)
-    
-    def _refresh(self) -> None:
+        self.set_interval(1.0, self._refresh_stats)
+
+    @work(thread=True)
+    def _refresh_stats(self) -> None:
+        # Get Jetson Load
         try:
-            result = subprocess.check_output(
-                ["ssh", f"{NODES['jetson'].user}@{NODES['jetson'].ip}", "cat /proc/loadavg"], text=True
+            load_res = subprocess.check_output(
+                ["ssh", f"{NODES['jetson'].user}@{NODES['jetson'].ip}", "cat /proc/loadavg"],
+                text=True, timeout=1.5  # Slightly tighter timeout
             )
-            self.load = result.split()[0]
+            load = load_res.split()[0]
         except Exception:
-            self.load = "‑"
-        self.update(Text(f"🖥️ Jetson Load: {self.load}", style=f"bold {Colors.CYAN}"))
+            load = "‑"
+        
+        # Get active node latency
+        try:
+            card = self.app.query_one(f"#node-card-{self.app.active_node}", NodeStatusCard)
+            latency = f"{card.latency_ms:.0f}ms"
+        except Exception:
+            latency = "--ms"
+
+        # Update UI safely
+        self.app.call_from_thread(self._update_stats_ui, load, latency)
+
+    def _update_stats_ui(self, load: str, latency: str) -> None:
+        self.jetson_load = load
+        self.node_latency = latency
+        self._update_ui()
+
+    def _update_ui(self) -> None:
+        text = Text()
+        text.append(" 🖥️  ", style=Colors.MUTED)
+        text.append(f"JETSON: {self.jetson_load}", style=f"bold {Colors.CYAN}")
+        text.append("  │  ", style=Colors.MUTED)
+        text.append(f"LATENCY: {self.node_latency}", style=Colors.SILVER)
+        text.append("  │  ", style=Colors.MUTED)
+        text.append("F1 HELP", style=f"italic {Colors.MUTED}")
+        self.update(text)
+
+class CommandZone(Horizontal):
+    """Dedicated zone for command input with better focus indicators."""
+    def compose(self) -> ComposeResult:
+        yield Label("▶", id="cmd-indicator")
+        yield Input(
+            placeholder="Type a command or ask the Sovereign... (F1 for help)",
+            id="prompt-input"
+        )
+
+    def on_mount(self) -> None:
+        self.add_class("blurred")
+
+    def on_focus(self) -> None:
+        self.remove_class("blurred")
+        self.add_class("focused")
+        self.query_one("#cmd-indicator").update("█")
+
+    def on_blur(self) -> None:
+        self.remove_class("focused")
+        self.add_class("blurred")
+        self.query_one("#cmd-indicator").update("▶")
 
 class InferenceLog(RichLog):
     """Enhanced inference log with glyph detection."""
@@ -657,50 +706,33 @@ class InferenceLog(RichLog):
 
     def write_response_start(self) -> None:
         """Mark start of response."""
-        # We don't write a static text anymore, we verify the spinner is valid or just log the header
-        self.write(Text("🌀 Thinking...", style=f"bold {Colors.SPIRAL_PURPLE}"))
+        self.write(Text())
+        header = Text()
+        header.append("└── ", style=Colors.GOLD)
+        header.append("Observer Reading...", style=f"bold {Colors.SPIRAL_PURPLE}")
+        self.write(header)
+        self._streaming_active = True
+        self._streaming_buffer = ""
 
     def write_token(self, token: str) -> None:
-        """Accumulate streaming tokens (don't write each one as separate line)."""
-        if not self._streaming_active:
-            self._streaming_active = True
-            self._streaming_buffer = ""
-            # Write the response header once
-            self.write(Text())
-            text = Text()
-            text.append("└─ ", style=Colors.GOLD)
-            text.append("Response", style=f"bold {Colors.CYAN}")
-            text.append(" ─┘", style=Colors.GOLD)
-            self.write(text)
-            self.write(Text())
-
-        # Accumulate token (don't write yet)
+        """Write token fragment and scroll."""
         self._streaming_buffer += token
-
-        # Check for glyphs in accumulated buffer
+        
+        # Check for glyphs
         glyphs_found = detect_glyphs(token)
         if glyphs_found:
             for glyph, meaning, color, trips in glyphs_found:
                 self.post_message(self.GlyphDetected(glyph, meaning, trips))
 
+        # Render token (with potential highlighting)
+        fragment = Text(token)
+        # Quick highlights for common tokens if needed
+        self.write(fragment, scroll_end=True)
+
     def write_response_end(self, tokens: int, duration_s: float) -> None:
-        """Write accumulated response and completion stats."""
-        # Write the accumulated streaming buffer as one block
-        if self._streaming_active and self._streaming_buffer:
-            # Apply glyph highlighting to the full response
-            response_text = Text(self._streaming_buffer)
-            glyphs_found = detect_glyphs(self._streaming_buffer)
-            if glyphs_found:
-                # Highlight glyphs in the response
-                for glyph, meaning, color, trips in glyphs_found:
-                    response_text.highlight_regex(re.escape(glyph), f"bold {color}")
-
-            self.write(response_text)
-            self.write(Text())
-
-            # Reset streaming state
-            self._streaming_buffer = ""
-            self._streaming_active = False
+        """Completion stats."""
+        self._streaming_active = False
+        self._streaming_buffer = ""
 
         # Write stats
         text = Text()
@@ -812,9 +844,8 @@ Reset with Ctrl+R.
 class SovereignConsole(App):
     """Sovereign Console v2.0"""
 
-    # CSS with direct hex colors (no variables)
     CSS = r"""
-    Screen {  # Raw for CSS escapes
+    Screen {
         background: #0a0a14;
         layout: vertical;
     }
@@ -822,142 +853,65 @@ class SovereignConsole(App):
     AnimatedHeader {
         dock: top;
         height: 1;
-        min-height: 1;
         background: #0a0a14;
+        border-bottom: solid #2d2d44;
         padding: 0 1;
-    }
-
-    Footer {
-        dock: bottom;
-        height: 1;
-        min-height: 1;
-    }
-
-    #main-layout {
-        height: 1fr;
-    }
-
-    #inference-container {
-        width: 100%;
-        height: 1fr;
-        border: solid #0BC10F;
-        background: #1a1a2e;
-    }
-
-    #model-bar {
-        height: 3;
-        background: #2d2d44;
-        padding: 0 1;
-        border-bottom: dashed #5a5a7a;
-    }
-
-    #model-bar Button {
-        margin: 0 1;
-        min-width: 12;
-    }
-
-    #model-bar Button.active {
-        background: #FFD700;
-        color: #0a0a14;
-    }
-
-    #model-bar Label {
-        margin: 1 2;
     }
 
     InferenceLog {
         height: 1fr;
         border: none;
-        padding: 0 1;
-        overflow-y: auto;
+        padding: 1 2;
+        scrollbar-gutter: stable;
     }
 
-    JetsonLoadMonitor {
+    SystemFooter {
+        dock: bottom;
         height: 1;
-        padding: 0 1;
         background: #1a1a2e;
-        color: #00CED1;
-        text-align: center;
+        color: #a0a0b0;
+        padding: 0 1;
+        border-top: solid #2d2d44;
     }
 
-    #input-bar {
+    CommandZone {
+        dock: bottom;
         height: 3;
-        min-height: 3;
-        max-height: 3;
-        background: #1a1a2e;
+        background: #0a0a14;
         padding: 0 1;
-        border-top: solid #5a5a7a;
-        border-bottom: solid #5a5a7a;
         align: center middle;
+        border-top: dashed #2d2d44;
     }
 
-    #input-indicator {
+    CommandZone #cmd-indicator {
         width: 3;
-        height: 1;
         content-align: center middle;
         color: #5a5a7a;
-        padding: 0 1;
     }
 
-    #input-indicator.focused {
+    CommandZone.focused #cmd-indicator {
         color: #FFD700;
     }
 
-    #prompt-input {
+    CommandZone Input {
         width: 1fr;
         height: 1;
-        min-height: 1;
-        background: #2d2d44;
-        color: #FFFFFF;
+        background: #0a0a14;
         border: none;
+        padding: 0 1;
     }
 
-    #prompt-input:focus {
-        border: none;
-    }
-
-    Input {
-        color: #FFFFFF;
-        background: #2d2d44;
-    }
-
-    Input:focus {
-        color: #FFFFFF;
+    CommandZone.focused {
         background: #1a1a2e;
     }
 
-    #prompt-input > .input--cursor {
-        background: #FFD700;
-        color: #0a0a14;
-        text-style: bold;
-    }
-
-    #prompt-input > .input--selection {
-        background: #FFD700;
-        color: #0a0a14;
-    }
-
-    #prompt-input > .input--placeholder {
+    Input.-empty .input--placeholder {
         color: #5a5a7a;
         text-style: italic;
     }
 
-    HelpScreen {
-        align: center middle;
-    }
-
-    HelpScreen > Markdown {
-        width: 70;
-        height: auto;
-        max-height: 35;
-        padding: 2;
-        background: #1a1a2e;
-        border: solid #FFD700;
-    }
-
-    .sidebar-title {
-        text-align: center;
-        padding: 1 0;
+    #node-status-area {
+        display: none; /* Injected via script if needed, otherwise hidden in minimal mode */
     }
     """
 
@@ -978,31 +932,15 @@ class SovereignConsole(App):
 
     def compose(self) -> ComposeResult:
         yield AnimatedHeader(id="header")
-        with Vertical(id="main-layout"):
-            # Center - inference and monitor
-            with Vertical(id="inference-container"):
-                with Horizontal(id="model-bar"):
-                    yield Button("🔮 Jetson", id="btn-jetson", classes="active")
-                    yield Button("⚡ Studio", id="btn-studio")
-                    yield Button("💻 Local", id="btn-local")
-                    yield Label("", id="chat-indicator")
-                inference_log = InferenceLog(id="inference-log", highlight=True, markup=True)
-                inference_log.can_focus = True
-                yield inference_log
-                # Jetson load monitor
-                yield JetsonLoadMonitor(id="jetson-load-monitor")
-            # Input bar - guaranteed space in Vertical
-            with Horizontal(id="input-bar"):
-                indicator = Label("▶", id="input-indicator")
-                indicator.can_focus = False
-                yield indicator
-                prompt_input = Input(
-                    placeholder="Enter prompt... (†⟡ trips breaker)  |  /help for commands",
-                    id="prompt-input",
-                )
-                prompt_input.can_focus = True
-                yield prompt_input
-        yield Footer()
+        yield InferenceLog(id="inference-log", highlight=True, markup=True)
+        yield CommandZone(id="input-zone")
+        yield SystemFooter(id="system-footer")
+
+        # Hidden area for background node status tracking
+        with Container(id="node-status-area"):
+             for key in NODES:
+                 yield NodeStatusCard(key, id=f"node-card-{key}")
+             yield CircuitBreakerPanel(id="circuit-breaker")
 
     def on_mount(self) -> None:
         """Initialize."""
@@ -1033,51 +971,28 @@ class SovereignConsole(App):
         # Auto-focus the input field and verify it exists
         try:
             input_field = self.query_one("#prompt-input", Input)
-            input_bar = self.query_one("#input-bar")
-            log.write_system(f"✓ Input bar visible (height: {input_bar.size.height})", Colors.EMERALD)
             input_field.focus()
-            log_telemetry("STARTUP", f"Input field created and focused, visible={input_field.visible}")
+            log_telemetry("STARTUP", "Observer's Terminal focused.")
         except Exception as e:
-            log.write_error(f"✗ Input field error: {e}")
+            log.write_error(f"✗ Input focus error: {e}")
             log_telemetry("STARTUP_ERROR", f"Cannot focus input: {e}")
 
     def watch_chat_mode(self, mode: bool) -> None:
         """Update UI for chat mode."""
-        header = self.query_one("#header", AnimatedHeader)
-        header.chat_mode = mode
-
-        indicator = self.query_one("#chat-indicator", Label)
-        if mode:
-            indicator.update(Text("💬 CHAT ON", style=f"bold {Colors.CYAN}"))
-        else:
-            indicator.update("")
+        try:
+            header = self.query_one("#header", AnimatedHeader)
+            header.chat_mode = mode
+        except Exception:
+            pass
 
     def on_unmount(self) -> None:
         """Clean up on exit to prevent zombie processes."""
         log_telemetry("SHUTDOWN", "Console unmounting, cleaning up intervals")
 
-    @on(Button.Pressed)
-    def handle_node_button(self, event: Button.Pressed) -> None:
-        """Handle node selection."""
-        btn_id = event.button.id
-        if btn_id and btn_id.startswith("btn-"):
-            node_key = btn_id.replace("btn-", "")
-            if node_key in NODES:
-                self._switch_node(node_key)
 
     def _switch_node(self, node_key: str) -> None:
         """Switch active node."""
         self.active_node = node_key
-
-        for key in NODES:
-            try:
-                btn = self.query_one(f"#btn-{key}", Button)
-                if key == node_key:
-                    btn.add_class("active")
-                else:
-                    btn.remove_class("active")
-            except Exception:
-                pass
 
         log = self.query_one("#inference-log", InferenceLog)
         log.write_system(f"Switched to {NODES[node_key].name}")
@@ -1102,42 +1017,19 @@ class SovereignConsole(App):
         else:
             self._run_inference(prompt)
 
-    def on_focus(self, event) -> None:
-        """Update indicator when any widget gains focus."""
+    def action_focus_input(self) -> None:
+        """Focus the command input."""
         try:
-            if hasattr(event.widget, 'id') and event.widget.id == "prompt-input":
-                indicator = self.query_one("#input-indicator", Label)
-                indicator.add_class("focused")
-                indicator.update("▶")
+            self.query_one("#prompt-input", Input).focus()
         except Exception:
             pass
 
-    def on_blur(self, event) -> None:
-        """Update indicator when any widget loses focus."""
+    def action_clear_input(self) -> None:
+        """Clear the command input."""
         try:
-            if hasattr(event.widget, 'id') and event.widget.id == "prompt-input":
-                indicator = self.query_one("#input-indicator", Label)
-                indicator.remove_class("focused")
-                indicator.update("▷")
-        except Exception:
-            pass
-
-    def on_click(self, event) -> None:
-        """Handle clicks anywhere to focus input if needed."""
-        try:
-            # Get the clicked widget
-            widget = self.get_widget_at(event.x, event.y)[0]
-
-            # If we clicked on input-bar or its children, focus the input
-            if widget.id == "input-bar" or (hasattr(widget, 'parent') and widget.parent and widget.parent.id == "input-bar"):
-                input_field = self.query_one("#prompt-input", Input)
-                input_field.focus()
-                return
-
-            # Also focus if clicking in bottom area
             input_field = self.query_one("#prompt-input", Input)
-            if not input_field.has_focus and event.y >= self.size.height - 4:
-                input_field.focus()
+            input_field.value = ""
+            input_field.focus()
         except Exception:
             pass
 
@@ -1179,6 +1071,14 @@ class SovereignConsole(App):
 
         # Refocus input after command
         self.call_later(self.action_focus_input)
+
+    def on_idle(self) -> None:
+        """Keep focus on input if no other focusable widget is active."""
+        if not self.focused or str(self.focused.id) not in ("prompt-input", "inference-log"):
+             try:
+                 self.action_focus_input()
+             except Exception:
+                 pass
 
     def _toggle_chat(self, args: str) -> None:
         """Toggle chat mode."""
@@ -1631,22 +1531,6 @@ class SovereignConsole(App):
         """Show help."""
         self.push_screen(HelpScreen())
 
-    def action_focus_input(self) -> None:
-        """Focus the input field."""
-        try:
-            input_field = self.query_one("#prompt-input", Input)
-            input_field.focus()
-        except Exception:
-            pass
-
-    def action_clear_input(self) -> None:
-        """Clear the input field."""
-        try:
-            input_field = self.query_one("#prompt-input", Input)
-            input_field.value = ""
-            input_field.focus()
-        except Exception:
-            pass
 
     def action_scroll_log_up(self) -> None:
         """Scroll inference log up one page."""
