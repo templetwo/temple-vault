@@ -1,7 +1,6 @@
 """Event append and snapshot management."""
 
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path

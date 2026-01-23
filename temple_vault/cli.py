@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import sys
 
 from temple_vault.core.query import VaultQuery
 from temple_vault.core.events import VaultEvents
@@ -34,13 +33,13 @@ def main():
     mistakes_p.add_argument("action", help="Action to check")
     mistakes_p.add_argument("--context", help="Context filter")
 
-    values_p = query_sub.add_parser("values", help="Get values")
+    _values_p = query_sub.add_parser("values", help="Get values")
 
     spiral_p = query_sub.add_parser("spiral", help="Get spiral context")
     spiral_p.add_argument("session_id", help="Session ID")
 
     # Cache commands
-    cache_parser = subparsers.add_parser("rebuild-cache", help="Rebuild cache")
+    _cache_parser = subparsers.add_parser("rebuild-cache", help="Rebuild cache")
 
     # Record commands
     record_parser = subparsers.add_parser("record", help="Record to chronicle")

@@ -1,9 +1,7 @@
 """Tests for CacheBuilder - reconstructible inverted index."""
 
 import json
-from pathlib import Path
 
-import pytest
 from temple_vault.core.cache import CacheBuilder
 
 

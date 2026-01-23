@@ -1,9 +1,7 @@
 """Tests for VaultEvents - event append and snapshot management."""
 
 import json
-from pathlib import Path
 
-import pytest
 from temple_vault.core.events import VaultEvents
 
 

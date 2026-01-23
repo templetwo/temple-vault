@@ -149,7 +149,7 @@ class SpiralStateMachine:
             return True
 
         # Check thresholds
-        thresholds = self._load_thresholds()
+        _thresholds = self._load_thresholds()
 
         # Check for sensitive patterns
         sensitive_patterns = [

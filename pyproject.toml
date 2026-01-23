@@ -78,30 +78,31 @@ target-version = ['py39']
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F"]  # Core errors and failures only; add "I" for imports incrementally
-ignore = ["E501", "F401", "F541", "F841"]  # Fix incrementally
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]
 
 [tool.ruff.format]
 quote-style = "double"
 
 [tool.mypy]
 python_version = "3.10"
-warn_return_any = false  # Allow Any returns for now
-warn_unused_ignores = false
-warn_redundant_casts = false
-no_implicit_optional = false
 ignore_missing_imports = true
-disallow_untyped_defs = false
+warn_unused_ignores = true
 show_error_codes = true
 disable_error_code = [
-    "var-annotated",  # Type annotations on vars
-    "attr-defined",  # Object has no attribute
-    "operator",  # Unsupported operand types
-    "call-overload",  # List overload issues
-    "no-any-return",  # Returning Any from typed function
-    "assignment",  # Incompatible assignment
-    "misc",  # Cannot assign to type
-    "no-redef",  # Name already defined
+    "var-annotated",  # Gradual typing OK
+    "attr-defined",   # defaultdict/list issues
+    "operator",       # Type inference issues
+    "call-overload",  # List initialization
+    "no-redef",       # Anthropic SDK redefinitions
+    "misc",           # Type assignment issues
+    "assignment",     # Sequence type issues
+    "no-any-return",  # Allow Any returns for now
 ]
 
 [tool.pytest.ini_options]

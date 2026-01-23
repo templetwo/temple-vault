@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 # Conditional import for Anthropic SDK
 try:
@@ -125,7 +125,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
 
         # Security: prevent directory traversal
         if ".." in key:
-            raise ValueError(f"Invalid path: directory traversal not allowed")
+            raise ValueError("Invalid path: directory traversal not allowed")
 
         return key
 
@@ -328,7 +328,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
             try:
                 new_content = json.loads(new_text)
             except json.JSONDecodeError:
-                return f"Error: Replacement resulted in invalid JSON"
+                return "Error: Replacement resulted in invalid JSON"
         else:
             new_content = {"text": new_text}
 
@@ -390,7 +390,7 @@ class TempleVaultMemoryTool(BetaAbstractMemoryTool):
             try:
                 new_content = json.loads(new_text)
             except json.JSONDecodeError:
-                return f"Error: Insert resulted in invalid JSON"
+                return "Error: Insert resulted in invalid JSON"
         else:
             new_content = {"text": new_text}
 

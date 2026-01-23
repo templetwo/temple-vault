@@ -221,7 +221,7 @@ class TempleMemoryHandler:
         # Always pause for deletion
         event_id = self.spiral.record_governance_event(
             decision="pause",
-            reason=f"Delete requested - requires confirmation",
+            reason="Delete requested - requires confirmation",
             context=key,
             restraint_score=1.0,  # Maximum restraint for deletion
         )
@@ -247,7 +247,7 @@ class TempleMemoryHandler:
         # Record the confirmed deletion
         self.spiral.record_governance_event(
             decision="proceed",
-            reason=f"Delete confirmed by user",
+            reason="Delete confirmed by user",
             context=f"key={key}, approval={event_id}",
             restraint_score=0.0,  # User has confirmed
         )

@@ -17,7 +17,7 @@ Usage:
 
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from datetime import datetime, timezone
 import hashlib
 import re
@@ -434,7 +434,7 @@ def main():
 
         stats = index_project(project_path, vault_path, args.session)
 
-        print(f"\nResults:")
+        print("\nResults:")
         print(f"  Files scanned: {stats['files_scanned']}")
         print(f"  Insights found: {stats['insights_found']}")
         print(f"  Domains: {', '.join(stats['domains_touched'])}")

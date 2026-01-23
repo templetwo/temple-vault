@@ -62,10 +62,8 @@ from temple_vault.core.query import VaultQuery
 from temple_vault.core.events import VaultEvents
 from temple_vault.core.cache import CacheBuilder
 from temple_vault.core.glyphs import (
-    get_glyph_unicode,
     get_domain_glyph,
     get_intensity_glyph,
-    get_operation_glyph,
     get_session_signature,
     SPIRAL,
     MEMORY,

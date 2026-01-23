@@ -1,6 +1,5 @@
 """Tests for VaultQuery - wisdom retrieval via filesystem queries."""
 
-import pytest
 from temple_vault.core.query import VaultQuery
 
 
