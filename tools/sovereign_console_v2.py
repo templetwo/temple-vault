@@ -1403,8 +1403,9 @@ class SovereignConsole(App):
 
         try:
             import subprocess
+            import shutil
 
-            ollama_path = os.path.expanduser("~/bin/ollama")
+            ollama_path = shutil.which("ollama") or "/usr/local/bin/ollama"
             cmd = [ollama_path, "run", model, test_prompt]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60.0)
 
@@ -1461,10 +1462,61 @@ class SovereignConsole(App):
         )
 
         # CLI mode for local node (no HTTP server needed!)
+        # Check if we're running ON this node
         is_local = node.ip in ("127.0.0.1", "localhost")
+
+        # Also check if the configured node IP matches our local machine
+        if not is_local:
+            try:
+                import socket
+                import subprocess
+
+                # Method 1: Get IPs from hostname
+                local_ips = set()
+                try:
+                    local_ips.update(socket.gethostbyname_ex(socket.gethostname())[2])
+                except socket.gaierror:
+                    pass
+
+                # Method 2: Get IPs from hostname -I (Linux)
+                try:
+                    result = subprocess.run(
+                        ['hostname', '-I'], capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        local_ips.update(result.stdout.strip().split())
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    pass
+
+                # Method 3: Get IPs from ip addr (more reliable on Linux)
+                try:
+                    result = subprocess.run(
+                        ['ip', '-4', 'addr', 'show'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        import re
+                        for match in re.findall(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout):
+                            local_ips.add(match)
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    pass
+
+                if node.ip in local_ips:
+                    is_local = True
+                    log_telemetry("NODE_DETECT", f"Detected local node via IP match: {node.ip} in {local_ips}")
+
+            except Exception as e:
+                log_telemetry("NODE_DETECT", f"IP detection failed: {e}, using HTTP")
+
         if is_local:
+            self.app.call_from_thread(
+                log.write_system, f"Using CLI mode (local node detected)", Colors.MUTED
+            )
             self._run_cli_inference(prompt, model)
         else:
+            self.app.call_from_thread(
+                log.write_system, f"Using HTTP mode -> {node.ip}:{node.port}", Colors.MUTED
+            )
             # HTTP mode for remote nodes
             messages = []
             if self.chat_mode:
@@ -1487,9 +1539,26 @@ class SovereignConsole(App):
 
         try:
             import subprocess
+            import shutil
 
-            ollama_path = os.path.expanduser("~/bin/ollama")
+            # Find ollama binary - check common locations
+            ollama_path = shutil.which("ollama")
+            if not ollama_path:
+                for candidate in [
+                    os.path.expanduser("~/bin/ollama"),
+                    "/usr/local/bin/ollama",
+                    "/usr/bin/ollama",
+                ]:
+                    if os.path.exists(candidate):
+                        ollama_path = candidate
+                        break
+
+            if not ollama_path:
+                self.app.call_from_thread(log.write_error, "Ollama binary not found in PATH or common locations")
+                return
+
             cmd = [ollama_path, "run", model, prompt]
+            self.app.call_from_thread(log.write_system, f"CLI: {ollama_path} run {model}", Colors.MUTED)
 
             self.app.call_from_thread(log.write_response_start)
 
@@ -1497,6 +1566,10 @@ class SovereignConsole(App):
 
             if result.returncode == 0:
                 response = result.stdout.strip()
+                if not response:
+                    self.app.call_from_thread(log.write_error, "CLI returned empty response")
+                    return
+
                 full_response = ""
                 for token in response.split():
                     full_response += token + " "
