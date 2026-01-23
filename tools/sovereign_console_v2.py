@@ -838,7 +838,8 @@ class SovereignConsole(App):
     }
 
     #inference-container {
-        width: 1fr;
+        width: 100%;
+        height: 1fr;
         border: solid #0BC10F;
         background: #1a1a2e;
     }
