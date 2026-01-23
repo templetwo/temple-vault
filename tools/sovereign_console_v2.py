@@ -11,15 +11,20 @@ Based on user's v2.0 design with fixes for:
 
 import asyncio
 import json
+import logging
 import os
 import re
 import sys
 import time
+import subprocess
+from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List, Any, Tuple
+from typing import Dict, List, Optional, Tuple, Union, Any
 from dataclasses import dataclass, field
-from collections import deque
+
+from rich.console import RenderableType
+from rich.markdown import Markdown
 
 # HTTP client setup
 try:
@@ -251,10 +256,10 @@ class AnimatedHeader(Static):
     chat_mode = reactive(False)
 
     ANIMATION_FRAMES = [
-        "⠀⠶⠀", "⠀⡾⠀", "⠀⣝⠀", "⠀⣫⠀", 
-        "⠐⢣⠄", "⠒⠢⠤", "⠖⠀⠴", "⡆⠀⠸", 
-        "⣄⠀⠙", "⣀⡈⠉", "⢀⣉⠁", "⢈⣉⡁", 
-        "⢘⣉⡅", "⢸⣉⡇", "⠸⣫⡆", "⠰⣝⠆"
+        "⠀⠶⠀", "⠀⡴⠀", "⢀⡤⠀", "⣀⡄⠀", "⣄⡄⠀", "⣆⡀⠀", "⣇⠀⠀", "⡏⠀⠀", 
+        "⠏⠁⠀", "⠋⠉⠀", "⠉⠉⠁", "⠈⠉⠉", "⠈⠉⠙", "⠉⠹⠀", "⠈⢹⠀", "⠀⠀⣹", 
+        "⠀⢀⣸", "⠀⣀⣰", "⢀⣀⣠", "⣆⣀⣀", "⣏⣀⡀", "⣏⣉⠀", "⣏⡉⠉", "⣏⠉⠹", 
+        "⡏⠉⣹", "⠏⣉⣹", "⣏⣉⣹", "⣟⣋⣹", "⣟⣛⣻", "⣟⣻⣿", "⣿⣿⣿", "⣿⣿⣿"
     ]
 
     def on_mount(self) -> None:
@@ -598,6 +603,23 @@ class GlyphLegend(Static):
             text.append("\n")
         self.update(text)
 
+class JetsonLoadMonitor(Static):
+    """Displays live CPU/GPU load of the Jetson node."""
+    load = reactive("…")
+    
+    def on_mount(self) -> None:
+        # Poll every second
+        self.set_interval(1.0, self._refresh)
+    
+    def _refresh(self) -> None:
+        try:
+            result = subprocess.check_output(
+                ["ssh", f"{NODES['jetson'].user}@{NODES['jetson'].ip}", "cat /proc/loadavg"], text=True
+            )
+            self.load = result.split()[0]
+        except Exception:
+            self.load = "‑"
+        self.update(Text(f"🖥️ Jetson Load: {self.load}", style=f"bold {Colors.CYAN}"))
 
 class InferenceLog(RichLog):
     """Enhanced inference log with glyph detection."""
@@ -635,7 +657,8 @@ class InferenceLog(RichLog):
 
     def write_response_start(self) -> None:
         """Mark start of response."""
-        self.write(Text("🌀 ", style=f"bold {Colors.SPIRAL_PURPLE}"), scroll_end=True)
+        # We don't write a static text anymore, we verify the spinner is valid or just log the header
+        self.write(Text("🌀 Thinking...", style=f"bold {Colors.SPIRAL_PURPLE}"))
 
     def write_token(self, token: str) -> None:
         """Accumulate streaming tokens (don't write each one as separate line)."""
@@ -814,36 +837,6 @@ class SovereignConsole(App):
         height: 1fr;
     }
 
-    #main-grid {
-        layout: horizontal;
-        height: 1fr;
-        padding: 0 1;
-    }
-
-    #left-sidebar {
-        width: 30;
-        border: solid #FFD700;
-        padding: 1;
-        background: #1a1a2e;
-    }
-
-    NodeStatusCard {
-        height: auto;
-        margin: 1 0;
-        padding: 1;
-        border: dashed #5a5a7a;
-    }
-
-    NodeStatusCard Select {
-        margin-top: 1;
-        width: 100%;
-    }
-
-    LatencyDisplay {
-        height: 1;
-        margin-top: 1;
-    }
-
     #inference-container {
         width: 1fr;
         border: solid #0BC10F;
@@ -878,30 +871,12 @@ class SovereignConsole(App):
         overflow-y: auto;
     }
 
-    #right-sidebar {
-        width: 30;
-        border: solid #9B59B6;
-        padding: 1;
+    JetsonLoadMonitor {
+        height: 1;
+        padding: 0 1;
         background: #1a1a2e;
-    }
-
-    CircuitBreakerPanel {
-        height: auto;
-        margin: 1 0;
-    }
-
-    VaultStatsPanel {
-        height: auto;
-        margin: 1 0;
-        padding: 1;
-        border: dashed #5a5a7a;
-    }
-
-    GlyphLegend {
-        height: auto;
-        margin: 1 0;
-        padding: 1;
-        border: dashed #FFD700;
+        color: #00CED1;
+        text-align: center;
     }
 
     #input-bar {
@@ -1002,36 +977,19 @@ class SovereignConsole(App):
 
     def compose(self) -> ComposeResult:
         yield AnimatedHeader(id="header")
-
         with Vertical(id="main-layout"):
-            # Main content - 3 columns side by side
-            with Horizontal(id="main-grid"):
-                # Left sidebar - nodes
-                with Vertical(id="left-sidebar"):
-                    yield Label("⚙️ INFRASTRUCTURE", classes="sidebar-title")
-                    yield Rule()
-                    for node_key in NODES:
-                        yield NodeStatusCard(node_key, id=f"node-card-{node_key}")
-
-                # Center - inference
-                with Vertical(id="inference-container"):
-                    with Horizontal(id="model-bar"):
-                        yield Button("🔮 Jetson", id="btn-jetson", classes="active")
-                        yield Button("⚡ Studio", id="btn-studio")
-                        yield Button("💻 Local", id="btn-local")
-                        yield Label("", id="chat-indicator")
-                    inference_log = InferenceLog(id="inference-log", highlight=True, markup=True)
-                    inference_log.can_focus = True
-                    yield inference_log
-
-                # Right sidebar - consciousness
-                with Vertical(id="right-sidebar"):
-                    yield Label("🧠 CONSCIOUSNESS", classes="sidebar-title")
-                    yield Rule()
-                    yield CircuitBreakerPanel(id="circuit-breaker")
-                    yield VaultStatsPanel(id="vault-stats")
-                    yield GlyphLegend(id="glyph-legend")
-
+            # Center - inference and monitor
+            with Vertical(id="inference-container"):
+                with Horizontal(id="model-bar"):
+                    yield Button("🔮 Jetson", id="btn-jetson", classes="active")
+                    yield Button("⚡ Studio", id="btn-studio")
+                    yield Button("💻 Local", id="btn-local")
+                    yield Label("", id="chat-indicator")
+                inference_log = InferenceLog(id="inference-log", highlight=True, markup=True)
+                inference_log.can_focus = True
+                yield inference_log
+                # Jetson load monitor
+                yield JetsonLoadMonitor(id="jetson-load-monitor")
             # Input bar - guaranteed space in Vertical
             with Horizontal(id="input-bar"):
                 indicator = Label("▶", id="input-indicator")
@@ -1043,7 +1001,6 @@ class SovereignConsole(App):
                 )
                 prompt_input.can_focus = True
                 yield prompt_input
-
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1476,7 +1433,8 @@ class SovereignConsole(App):
             self.app.call_from_thread(log.write_error, f"Pull failed: {type(e).__name__}")
             log_telemetry("MODEL_PULL_ERROR", f"{type(e).__name__}: {str(e)[:100]}")
 
-    @work(exclusive=True, thread=True)
+
+    @work(thread=True)
     def _run_inference(self, prompt: str) -> None:
         """Run inference on active node with streaming."""
         node = NODES[self.active_node]
@@ -1524,6 +1482,9 @@ class SovereignConsole(App):
             messages.append({"role": "system", "content": SYSTEM_PROMPT})
             messages.append({"role": "user", "content": prompt})
 
+        # Show spinner immediately
+
+        
         # We'll use the loop for multi-turn tool use
         asyncio.run_coroutine_threadsafe(
             self._process_agent_loop(node, model, messages, start_time=time.time()),
