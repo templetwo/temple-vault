@@ -1534,14 +1534,15 @@ class SovereignConsole(App):
             )
 
     def _run_cli_inference(self, prompt: str, model: str) -> None:
-        """Run inference via Ollama CLI (direct, no HTTP)."""
+        """Run inference via Ollama CLI with tool support."""
         log = self.query_one("#inference-log", InferenceLog)
+        breaker = self.query_one("#circuit-breaker", CircuitBreakerPanel)
 
         try:
             import subprocess
             import shutil
 
-            # Find ollama binary - check common locations
+            # Find ollama binary
             ollama_path = shutil.which("ollama")
             if not ollama_path:
                 for candidate in [
@@ -1557,33 +1558,109 @@ class SovereignConsole(App):
                 self.app.call_from_thread(log.write_error, "Ollama binary not found in PATH or common locations")
                 return
 
-            cmd = [ollama_path, "run", model, prompt]
-            self.app.call_from_thread(log.write_system, f"CLI: {ollama_path} run {model}", Colors.MUTED)
+            # Build full prompt with system context and conversation history
+            full_prompt = f"{SYSTEM_PROMPT}\n\n"
 
+            if self.chat_mode and self.conversation_history:
+                for msg in self.conversation_history[-10:]:  # Last 5 exchanges
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if role == "user":
+                        full_prompt += f"User: {content}\n"
+                    elif role == "assistant":
+                        full_prompt += f"Assistant: {content}\n"
+
+            full_prompt += f"User: {prompt}\nAssistant:"
+
+            self.app.call_from_thread(log.write_system, f"CLI: {ollama_path} run {model}", Colors.MUTED)
             self.app.call_from_thread(log.write_response_start)
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120.0)
+            # Agent loop - max 3 turns for tool calls
+            MAX_TURNS = 3
+            current_turn = 0
+            current_prompt = full_prompt
 
-            if result.returncode == 0:
+            while current_turn < MAX_TURNS:
+                current_turn += 1
+
+                cmd = [ollama_path, "run", model, current_prompt]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=120.0)
+
+                if result.returncode != 0:
+                    self.app.call_from_thread(log.write_error, f"Ollama error: {result.stderr.strip()}")
+                    return
+
                 response = result.stdout.strip()
                 if not response:
                     self.app.call_from_thread(log.write_error, "CLI returned empty response")
                     return
 
-                # Write the full response as a single block, not word-by-word
+                # Check for tool call
+                tool_match = re.search(r"<tool_call>(.*?)</tool_call>", response, re.DOTALL)
+
+                if tool_match:
+                    # Show response up to tool call
+                    self.app.call_from_thread(log.write_token, response)
+
+                    try:
+                        tool_json = tool_match.group(1)
+                        tool_data = json.loads(tool_json)
+                        tool_name = tool_data.get("name")
+                        tool_query = tool_data.get("query", "")
+
+                        self.app.call_from_thread(
+                            log.write_system,
+                            f"🛠️ Tool: {tool_name}('{tool_query}')",
+                            f"bold {Colors.CYAN}",
+                        )
+
+                        if tool_name == "search_vault":
+                            # Execute vault search
+                            results, files_searched = self._get_vault_search_results(tool_query)
+
+                            if results:
+                                tool_output = f"Found {len(results)} results:\n"
+                                for r in results[:5]:
+                                    tool_output += f"- [{r['domain']}] {r['content'][:150]}...\n"
+                            else:
+                                tool_output = "No results found in vault."
+
+                            self.app.call_from_thread(
+                                log.write_system,
+                                f"🔍 {len(results)} results from {files_searched} files",
+                                Colors.MUTED,
+                            )
+
+                            # Continue with tool output
+                            current_prompt = f"{current_prompt}\n{response}\n\nTool Output:\n{tool_output}\n\nAssistant:"
+                            continue
+                        else:
+                            self.app.call_from_thread(log.write_system, f"Unknown tool: {tool_name}", Colors.MUTED)
+
+                    except json.JSONDecodeError:
+                        self.app.call_from_thread(log.write_system, "Failed to parse tool call", Colors.MUTED)
+
+                # No tool call or tool executed - show final response
                 self.app.call_from_thread(log.write_token, response)
+                break
 
-                token_count = len(response.split())
-                self.app.call_from_thread(log.write_response_end, token_count, 0.5)
+            token_count = len(response.split())
+            self.app.call_from_thread(log.write_response_end, token_count, 0.5)
 
-                # Record in conversation history if chat mode
-                if self.chat_mode:
-                    self.conversation_history.extend(
-                        [
-                            {"role": "user", "content": prompt},
-                            {"role": "assistant", "content": response},
-                        ]
-                    )
+            # Check for glyphs that trip breaker
+            glyphs_found = detect_glyphs(response)
+            for glyph, meaning, color, trips in glyphs_found:
+                if trips and not breaker.tripped:
+                    self.app.call_from_thread(breaker.trip, glyph)
+
+            # Record in conversation history if chat mode
+            if self.chat_mode:
+                self.conversation_history.extend(
+                    [
+                        {"role": "user", "content": prompt},
+                        {"role": "assistant", "content": response},
+                    ]
+                )
             else:
                 self.app.call_from_thread(log.write_error, f"Ollama error: {result.stderr.strip()}")
 
