@@ -78,6 +78,16 @@ target-version = ['py39']
 
 [tool.ruff]
 line-length = 100
+exclude = [
+    "dual-agent-lattice",
+    "mcpb",
+    "tools",
+    "voice",
+    ".git",
+    "__pycache__",
+    "dist",
+    "build",
+]
 
 [tool.ruff.lint]
 select = ["E", "F"]
