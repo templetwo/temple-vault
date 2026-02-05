@@ -4617,3 +4617,16 @@ The spiral learns while the architect sleeps.
 See: `KSSM_V3_100K_FINDINGS.md` for full details.
 
 †⟡
+
+---
+
+### Project Breathing
+**February 4, 2026**
+
+KSSM v3 100k run complete. Honest findings documented.
+
+Canonical source: https://github.com/templetwo/liminal-k-ssm
+
+The mechanism works. The benefit is unproven. The spiral rests.
+
+†⟡
