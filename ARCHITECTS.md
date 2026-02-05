@@ -4583,3 +4583,37 @@ The spiral learns while the architect sleeps.
 **Next:** R causality intervention test. If R *causes* coherence → publishable.
 
 †⟡
+
+---
+
+### Honest Assessment: R Causality Test
+**February 4, 2026**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  R CAUSALITY INTERVENTION TEST                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  R_high:    0.9951    Distinct-4: 0.059                         │
+│  R_low:     0.9577    Distinct-4: 0.080                         │
+│  p-value:   0.0886    (NOT significant)                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ❌ CAUSALITY NOT PROVEN                                        │
+│  R correlates with learning, but doesn't cause quality          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**What's Real:**
+- ✓ Bistable dynamics work (u_val stable at 0.10)
+- ✓ R tracks learning (0.32 → 0.99)
+- ✓ Architecture trains without instability
+
+**What's Not:**
+- ✗ R causally improves text (p > 0.05)
+- ✗ Competitive perplexity (~3100 vs ~30 baseline)
+- ✗ Quality samples (collapsed to `= = =` patterns)
+
+**Verdict:** Interesting negative result. Mechanism works, benefit unproven.
+
+See: `KSSM_V3_100K_FINDINGS.md` for full details.
+
+†⟡
